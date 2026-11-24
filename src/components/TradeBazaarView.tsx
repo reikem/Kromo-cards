@@ -5,10 +5,13 @@ import {
   Check,
   Clock,
   Download,
+  Filter,
   Flame,
+  Gem,
   Gift,
   Layers,
   Palette,
+  RotateCcw,
   Search,
   ShieldCheck,
   Sparkles,
@@ -75,6 +78,129 @@ interface TradeBazaarViewProps {
   onNotifyToast?: (msg: string) => void;
 }
 
+type BazaarCategoryFilter =
+  | 'all'
+  | 'musica'
+  | 'eventos'
+  | 'colecciones-especiales'
+  | 'deportes';
+
+type CardRarityTier = 'mitica' | 'ultra-rara' | 'rara' | 'comun';
+
+const BAZAAR_CATEGORY_OPTIONS: { id: BazaarCategoryFilter; label: string }[] = [
+  { id: 'all', label: 'Todas' },
+  { id: 'musica', label: 'Música' },
+  { id: 'eventos', label: 'Eventos' },
+  { id: 'colecciones-especiales', label: 'Colecciones Especiales' },
+  { id: 'deportes', label: 'Deportes' },
+];
+
+const RARITY_OPTIONS: {
+  id: 'all' | CardRarityTier;
+  label: string;
+  badgeClass: string;
+}[] = [
+  { id: 'all', label: 'Todas las rarezas', badgeClass: 'text-slate-200' },
+  {
+    id: 'mitica',
+    label: 'Mítica / Limitada',
+    badgeClass: 'bg-amber-400/15 border-amber-400/40 text-amber-300',
+  },
+  {
+    id: 'ultra-rara',
+    label: 'Ultra Rara Holo',
+    badgeClass: 'bg-fuchsia-500/15 border-fuchsia-400/40 text-fuchsia-300',
+  },
+  {
+    id: 'rara',
+    label: 'Rara Especial',
+    badgeClass: 'bg-sky-500/15 border-sky-400/40 text-sky-300',
+  },
+  {
+    id: 'comun',
+    label: 'Estándar',
+    badgeClass: 'bg-white/10 border-white/15 text-slate-300',
+  },
+];
+
+function getCardEffectiveCategory(card: Photocard): CommunityCategory {
+  if (card.tradeCategory) return card.tradeCategory;
+  if (card.frameStyle === 'gold') return 'deportes';
+  if (card.concert?.enabled) return 'musica';
+  return 'eventos';
+}
+
+function matchesBazaarCategory(card: Photocard, filter: BazaarCategoryFilter): boolean {
+  if (filter === 'all') return true;
+  const cat = getCardEffectiveCategory(card);
+  if (filter === 'musica') return cat === 'musica';
+  if (filter === 'eventos') return cat === 'eventos';
+  if (filter === 'deportes') return cat === 'deportes';
+  if (filter === 'colecciones-especiales') {
+    const edition = (card.editionLabel || '').toLowerCase();
+    return (
+      cat === 'edicion-limitada' ||
+      cat === 'celebraciones' ||
+      cat === 'fantasia' ||
+      Boolean(card.customFrameId) ||
+      (card.frameCelebration !== undefined && card.frameCelebration !== 'ninguna') ||
+      edition.includes('limit') ||
+      edition.includes('especial') ||
+      edition.includes('vip')
+    );
+  }
+  return true;
+}
+
+function getCardRarity(card: Photocard): {
+  tier: CardRarityTier;
+  label: string;
+  badgeClass: string;
+} {
+  const ed = (card.editionLabel || '').toLowerCase();
+  if (
+    card.frameStyle === 'gold' ||
+    card.tradeCategory === 'edicion-limitada' ||
+    ed.includes('limit') ||
+    ed.includes('#01') ||
+    (card.shineIntensity >= 89 && Boolean(card.customFrameId))
+  ) {
+    return {
+      tier: 'mitica',
+      label: 'Mítica',
+      badgeClass: 'bg-amber-400/15 border-amber-400/40 text-amber-300',
+    };
+  }
+  if (
+    card.frameStyle === 'holo' ||
+    card.texture.startsWith('holo-') ||
+    Boolean(card.customTextureUrl) ||
+    card.shineIntensity >= 80
+  ) {
+    return {
+      tier: 'ultra-rara',
+      label: 'Ultra Rara',
+      badgeClass: 'bg-fuchsia-500/15 border-fuchsia-400/40 text-fuchsia-300',
+    };
+  }
+  if (
+    card.frameStyle === 'stadium' ||
+    (card.frameCelebration && card.frameCelebration !== 'ninguna') ||
+    card.stickers.length >= 2
+  ) {
+    return {
+      tier: 'rara',
+      label: 'Rara',
+      badgeClass: 'bg-sky-500/15 border-sky-400/40 text-sky-300',
+    };
+  }
+  return {
+    tier: 'comun',
+    label: 'Estándar',
+    badgeClass: 'bg-white/10 border-white/15 text-slate-300',
+  };
+}
+
 export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   currentUser,
   users,
@@ -100,8 +226,9 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
 }) => {
   const [tab, setTab] = useState<'bazaar' | 'trades' | 'assets'>('bazaar');
   const [marketSearch, setMarketSearch] = useState('');
-  const [marketFilter, setMarketFilter] = useState<'all' | 'timed' | 'friends' | 'gold' | 'holo'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | CommunityCategory>('all');
+  const [marketFilter, setMarketFilter] = useState<'all' | 'timed' | 'friends'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<BazaarCategoryFilter>('all');
+  const [rarityFilter, setRarityFilter] = useState<'all' | CardRarityTier>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'expiring' | 'popular'>('recent');
   const [marketPage, setMarketPage] = useState(1);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -135,35 +262,29 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   const myRelatedTrades = trades.filter(
     (t) => t.fromUserId === currentUser.id || t.toUserId === currentUser.id
   );
+  const pendingTradesCount = myRelatedTrades.filter((t) => t.status === 'pending').length;
+  const incomingPendingCount = myRelatedTrades.filter(
+    (t) => t.toUserId === currentUser.id && t.status === 'pending'
+  ).length;
   const completedTradesCount = trades.filter((t) => t.status === 'completed').length;
+  const myCompletedTradesCount = myRelatedTrades.filter((t) => t.status === 'completed').length;
 
   const findUser = (id: string) => users.find((u) => u.id === id);
   const findCard = (id?: string) => cards.find((c) => c.id === id);
 
   const filteredMarketplace = useMemo(() => {
     const filtered = communityTradeable.filter((card) => {
-      if (categoryFilter !== 'all') {
-        const cardCat =
-          card.tradeCategory ||
-          (card.frameStyle === 'gold' ? 'deportes' : card.concert?.enabled ? 'musica' : 'eventos');
-        if (cardCat !== categoryFilter) return false;
+      if (!matchesBazaarCategory(card, categoryFilter)) {
+        return false;
+      }
+      if (rarityFilter !== 'all' && getCardRarity(card).tier !== rarityFilter) {
+        return false;
       }
       if (marketFilter === 'timed') {
         if (!card.tradeExpiresAt) return false;
         if (formatRemainingTime(card.tradeExpiresAt, nowMs).expired) return false;
       }
       if (marketFilter === 'friends' && !currentUser.friends.includes(card.ownerId)) {
-        return false;
-      }
-      if (marketFilter === 'gold' && card.frameStyle !== 'gold') {
-        return false;
-      }
-      if (
-        marketFilter === 'holo' &&
-        card.frameStyle !== 'holo' &&
-        !card.texture.startsWith('holo-') &&
-        !card.customTextureUrl
-      ) {
         return false;
       }
       if (marketSearch.trim()) {
@@ -195,6 +316,7 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   }, [
     communityTradeable,
     categoryFilter,
+    rarityFilter,
     marketFilter,
     marketSearch,
     sortBy,
@@ -202,6 +324,20 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
     currentUser.friends,
     users,
   ]);
+
+  const hasActiveFilters =
+    categoryFilter !== 'all' ||
+    rarityFilter !== 'all' ||
+    marketFilter !== 'all' ||
+    marketSearch.trim().length > 0;
+
+  const resetAllFilters = () => {
+    setCategoryFilter('all');
+    setRarityFilter('all');
+    setMarketFilter('all');
+    setMarketSearch('');
+    setMarketPage(1);
+  };
 
   const MARKET_PAGE_SIZE = 6;
   const totalMarketPages = Math.max(1, Math.ceil(filteredMarketplace.length / MARKET_PAGE_SIZE));
@@ -329,24 +465,44 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
         </div>
       </div>
 
-      {/* Market Overview Counters (3 clean data blocks) */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      {/* Trade & Bazaar Live Counters */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-[#131622] border border-white/10 rounded-2xl p-4">
-          <div className="text-[11px] text-slate-400">Disponibles en Mercado</div>
+          <div className="text-[11px] text-slate-400">Intercambios Disponibles</div>
           <div className="font-mono-num text-xl sm:text-2xl font-extrabold text-sky-400 mt-1">
             {communityTradeable.length}
           </div>
-        </div>
-        <div className="bg-[#131622] border border-white/10 rounded-2xl p-4">
-          <div className="text-[11px] text-slate-400">Mis Cartas Publicadas</div>
-          <div className="font-mono-num text-xl sm:text-2xl font-extrabold text-amber-300 mt-1">
-            {myListedCount}
+          <div className="text-[11px] text-slate-400 mt-0.5">
+            {filteredMarketplace.length} según filtros · {myListedCount} tuyas
           </div>
         </div>
         <div className="bg-[#131622] border border-white/10 rounded-2xl p-4">
-          <div className="text-[11px] text-slate-400">Trueques Completados</div>
+          <div className="text-[11px] text-slate-400">Intercambios Pendientes</div>
+          <div className="font-mono-num text-xl sm:text-2xl font-extrabold text-amber-300 mt-1">
+            {pendingTradesCount}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-0.5">
+            {incomingPendingCount > 0
+              ? `${incomingPendingCount} por responder`
+              : 'Sin respuestas pendientes'}
+          </div>
+        </div>
+        <div className="bg-[#131622] border border-white/10 rounded-2xl p-4">
+          <div className="text-[11px] text-slate-400">Intercambios Completados</div>
           <div className="font-mono-num text-xl sm:text-2xl font-extrabold text-emerald-400 mt-1">
             {completedTradesCount}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-0.5">
+            {myCompletedTradesCount} completados contigo
+          </div>
+        </div>
+        <div className="bg-[#131622] border border-white/10 rounded-2xl p-4">
+          <div className="text-[11px] text-slate-400">Ofertas Tiempo Límite ⚡</div>
+          <div className="font-mono-num text-xl sm:text-2xl font-extrabold text-fuchsia-400 mt-1">
+            {timedTradeCount}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-0.5">
+            Total historial: {trades.length}
           </div>
         </div>
       </div>
@@ -550,120 +706,184 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
             </div>
           )}
 
-          {/* Marketplace Categories Bar */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#131622] border border-white/10 rounded-xl w-fit">
-            <button
-              type="button"
-              onClick={() => {
-                setCategoryFilter('all');
-                setMarketPage(1);
-              }}
-              className={`min-h-[34px] px-3 rounded-lg text-xs font-semibold transition-colors ${
-                categoryFilter === 'all'
-                  ? 'bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-400/40'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Todas las categorías
-            </button>
-            {COMMUNITY_CATEGORIES.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => {
-                  setCategoryFilter(cat.id);
-                  setMarketPage(1);
-                }}
-                className={`min-h-[34px] px-3 rounded-lg text-xs font-semibold transition-colors ${
-                  categoryFilter === cat.id
-                    ? 'bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-400/40'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Marketplace Search, Sub-Filters & Sort */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#131622] border border-white/10 rounded-xl">
-              {(
-                [
-                  { id: 'all', label: 'Todo' },
-                  { id: 'timed', label: `Tiempo Límite ⚡ (${timedTradeCount})` },
-                  { id: 'friends', label: 'Solo Amigos' },
-                  { id: 'gold', label: 'Doradas VIP' },
-                  { id: 'holo', label: 'Holográficas' },
-                ] as const
-              ).map((flt) => (
-                <button
-                  key={flt.id}
-                  type="button"
-                  onClick={() => {
-                    setMarketFilter(flt.id);
-                    setMarketPage(1);
-                  }}
-                  className={`min-h-[34px] px-3 rounded-lg text-xs font-semibold transition-colors ${
-                    marketFilter === flt.id
-                      ? 'bg-sky-500 text-slate-950'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  {flt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1 p-1 bg-[#131622] border border-white/10 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setSortBy('recent')}
-                  className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
-                    sortBy === 'recent' ? 'bg-sky-500 text-slate-950' : 'text-slate-300'
-                  }`}
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Recientes</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortBy('expiring')}
-                  className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
-                    sortBy === 'expiring' ? 'bg-amber-400 text-slate-950' : 'text-slate-300'
-                  }`}
-                >
-                  <Timer className="w-3.5 h-3.5" />
-                  <span>Por Vencer</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortBy('popular')}
-                  className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
-                    sortBy === 'popular' ? 'bg-fuchsia-400 text-slate-950' : 'text-slate-300'
-                  }`}
-                >
-                  <Flame className="w-3.5 h-3.5" />
-                  <span>Populares</span>
-                </button>
+          {/* Structured Bazaar Category, Rarity & Search Filter Panel */}
+          <section
+            aria-label="Panel de filtrado por categorías y rareza"
+            className="bg-[#131622] border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-sky-400 shrink-0" />
+                <h3 className="font-display text-sm font-bold text-white">
+                  Filtrar Intercambios del Bazaar
+                </h3>
+                <span className="font-mono-num px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-400/30 text-[11px] font-bold text-sky-300">
+                  {filteredMarketplace.length} / {communityTradeable.length} intercambios
+                </span>
               </div>
 
-              <div className="relative w-full sm:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="Buscar carta, dueño, serial..."
-                  value={marketSearch}
-                  onChange={(e) => {
-                    setMarketSearch(e.target.value);
-                    setMarketPage(1);
-                  }}
-                  className="w-full min-h-[42px] pl-9 pr-3 rounded-xl bg-[#131622] border border-white/10 text-xs text-white placeholder:text-slate-500"
-                />
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="min-h-[32px] px-3 rounded-lg bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Limpiar filtros</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* Categorías */}
+              <div className="lg:col-span-6 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Categoría
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {BAZAAR_CATEGORY_OPTIONS.map((cat) => {
+                    const count = communityTradeable.filter((c) =>
+                      matchesBazaarCategory(c, cat.id)
+                    ).length;
+                    const active = categoryFilter === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setCategoryFilter(cat.id);
+                          setMarketPage(1);
+                        }}
+                        className={`min-h-[36px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                          active
+                            ? 'bg-fuchsia-500/25 border-fuchsia-400 text-fuchsia-100'
+                            : 'bg-[#0B0D14] border-white/10 text-slate-300 hover:border-white/25 hover:text-white'
+                        }`}
+                      >
+                        <span>{cat.label}</span>
+                        <span className="font-mono-num text-[10px] opacity-75">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Rareza */}
+              <div className="lg:col-span-6 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Gem className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Rareza</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {RARITY_OPTIONS.map((rar) => {
+                    const count =
+                      rar.id === 'all'
+                        ? communityTradeable.length
+                        : communityTradeable.filter(
+                            (c) => getCardRarity(c).tier === rar.id
+                          ).length;
+                    const active = rarityFilter === rar.id;
+                    return (
+                      <button
+                        key={rar.id}
+                        type="button"
+                        onClick={() => {
+                          setRarityFilter(rar.id);
+                          setMarketPage(1);
+                        }}
+                        className={`min-h-[36px] px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                          active
+                            ? 'bg-amber-400 text-slate-950 border-amber-300'
+                            : 'bg-[#0B0D14] border-white/10 text-slate-300 hover:border-white/25 hover:text-white'
+                        }`}
+                      >
+                        <span>{rar.label}</span>
+                        <span className="font-mono-num text-[10px] opacity-75">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Availability, Sort & Search */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-white/10">
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0B0D14] border border-white/10 rounded-xl w-fit">
+                {(
+                  [
+                    { id: 'all', label: 'Todo' },
+                    { id: 'timed', label: `Tiempo Límite ⚡ (${timedTradeCount})` },
+                    { id: 'friends', label: 'Solo Amigos' },
+                  ] as const
+                ).map((flt) => (
+                  <button
+                    key={flt.id}
+                    type="button"
+                    onClick={() => {
+                      setMarketFilter(flt.id);
+                      setMarketPage(1);
+                    }}
+                    className={`min-h-[34px] px-3 rounded-lg text-xs font-semibold transition-colors ${
+                      marketFilter === flt.id
+                        ? 'bg-sky-500 text-slate-950'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {flt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 p-1 bg-[#0B0D14] border border-white/10 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSortBy('recent')}
+                    className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
+                      sortBy === 'recent' ? 'bg-sky-500 text-slate-950' : 'text-slate-300'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Recientes</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy('expiring')}
+                    className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
+                      sortBy === 'expiring' ? 'bg-amber-400 text-slate-950' : 'text-slate-300'
+                    }`}
+                  >
+                    <Timer className="w-3.5 h-3.5" />
+                    <span>Por Vencer</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortBy('popular')}
+                    className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 ${
+                      sortBy === 'popular' ? 'bg-fuchsia-400 text-slate-950' : 'text-slate-300'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Populares</span>
+                  </button>
+                </div>
+
+                <div className="relative w-full sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar carta, dueño, serial..."
+                    value={marketSearch}
+                    onChange={(e) => {
+                      setMarketSearch(e.target.value);
+                      setMarketPage(1);
+                    }}
+                    className="w-full min-h-[40px] pl-9 pr-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
 
           {filteredMarketplace.length === 0 ? (
             <div className="bg-[#131622] border border-white/10 rounded-3xl p-10 text-center space-y-2">
@@ -672,7 +892,7 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
                 No hay cartas con ese filtro en el mercado
               </div>
               <p className="text-xs text-slate-400">
-                Prueba otro filtro o publica una de tus cartas repetidas.
+                Prueba otra categoría o rareza, o publica una de tus cartas repetidas.
               </p>
             </div>
           ) : (
@@ -681,7 +901,8 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
                 {pagedMarketplace.map((card) => {
                   const owner = findUser(card.ownerId);
                   const timer = formatRemainingTime(card.tradeExpiresAt, nowMs);
-                  const catLabel = getCommunityCategoryLabel(card.tradeCategory);
+                  const catLabel = getCommunityCategoryLabel(getCardEffectiveCategory(card));
+                  const rarity = getCardRarity(card);
                   return (
                     <div
                       key={card.id}
@@ -690,11 +911,18 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
                       <Card3D card={card} compact onCardClick={() => onInspectCard(card)} />
 
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
                           <span className="truncate">
                             {catLabel} · <strong className="text-slate-200">{owner?.displayName}</strong>
                           </span>
-                          <span className="font-mono-num text-sky-400 shrink-0">{card.serialCode}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${rarity.badgeClass}`}
+                            >
+                              {rarity.label}
+                            </span>
+                            <span className="font-mono-num text-sky-400">{card.serialCode}</span>
+                          </div>
                         </div>
 
                         {timer.isTimed && (

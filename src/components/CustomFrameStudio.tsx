@@ -11,6 +11,7 @@ import {
   CELEBRATION_THEMES,
   COMMUNITY_CATEGORIES,
   FRAME_SHAPE_SPECS,
+  getFrameLayoutSpec,
   getFrameShapeClipPath,
 } from '../utils/frameShapes';
 
@@ -163,28 +164,49 @@ export const CustomFrameStudio: React.FC<CustomFrameStudioProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
             <div className="sm:col-span-4 flex flex-col items-center gap-2">
-              <div
-                className="w-32 aspect-[54/85] p-1.5 shadow-xl rounded-2xl flex items-center justify-center"
-                style={{
-                  background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-                  clipPath: getFrameShapeClipPath(shape),
-                }}
-              >
-                <div
-                  className="w-full h-full bg-[#0F1322] rounded-xl flex flex-col items-center justify-center p-2 text-center"
-                  style={{ clipPath: getFrameShapeClipPath(shape) }}
-                >
-                  <span className="text-2xl">
-                    {CELEBRATION_THEMES.find((c) => c.id === celebration)?.emblem || '✨'}
-                  </span>
-                  <span className="text-[11px] font-bold text-white mt-1 truncate max-w-full">
-                    {name.trim() || 'Tu Marco'}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {FRAME_SHAPE_SPECS.find((s) => s.id === shape)?.label}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const previewLayout = getFrameLayoutSpec(shape);
+                const previewPolaroid = shape === 'polaroid';
+                return (
+                  <div
+                    className="w-32 aspect-[54/85] p-1.5 shadow-xl rounded-2xl flex items-center justify-center"
+                    style={{
+                      background: previewPolaroid
+                        ? '#F1F5F9'
+                        : `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+                      clipPath: getFrameShapeClipPath(shape),
+                    }}
+                  >
+                    <div
+                      className={`w-full h-full rounded-xl flex flex-col items-center justify-center text-center overflow-hidden ${
+                        previewPolaroid ? 'bg-white text-slate-900' : 'bg-[#0F1322] text-white'
+                      }`}
+                      style={{
+                        clipPath: getFrameShapeClipPath(shape),
+                        padding: previewLayout.previewPadding,
+                      }}
+                    >
+                      <span className="text-2xl">
+                        {CELEBRATION_THEMES.find((c) => c.id === celebration)?.emblem || '✨'}
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold mt-1 leading-tight line-clamp-2 max-w-full ${
+                          previewPolaroid ? 'text-slate-900' : 'text-white'
+                        }`}
+                      >
+                        {name.trim() || 'Tu Marco'}
+                      </span>
+                      <span
+                        className={`text-[10px] mt-0.5 truncate max-w-full ${
+                          previewPolaroid ? 'text-slate-500' : 'text-slate-400'
+                        }`}
+                      >
+                        {FRAME_SHAPE_SPECS.find((s) => s.id === shape)?.label}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="sm:col-span-8 space-y-3 text-xs">

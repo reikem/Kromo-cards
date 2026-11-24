@@ -256,8 +256,19 @@ export interface CollectorUser {
   bio: string;
   favoriteArtist: string;
   friends: string[];
+  following?: string[];
   googleUid?: string;
   photoUrl?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  senderId: string;
+  recipientId?: string;
+  text: string;
+  cardId?: string;
+  createdAt: string;
 }
 
 export interface TradeOffer {
@@ -278,9 +289,11 @@ export interface RealtimeNotification {
   userId: string;
   title: string;
   message: string;
-  kind: 'trade' | 'gift' | 'community' | 'system';
+  kind: 'trade' | 'gift' | 'community' | 'chat' | 'system';
   relatedCardId?: string;
   relatedTradeId?: string;
+  relatedRoomId?: string;
+  relatedUserId?: string;
   triggerPush?: boolean;
   read: boolean;
   createdAt: string;
@@ -306,4 +319,5 @@ export interface BootstrapPayload {
   backdrops: CustomBackdrop[];
   trades: TradeOffer[];
   notifications: RealtimeNotification[];
+  chatMessages?: ChatMessage[];
 }

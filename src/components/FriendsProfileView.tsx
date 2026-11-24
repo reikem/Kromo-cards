@@ -4,8 +4,10 @@ import {
   CheckCircle2,
   Eye,
   FolderCheck,
+  Heart,
   Lock,
   LogOut,
+  MessageCircle,
   RefreshCw,
   UserCheck,
   UserPlus,
@@ -39,6 +41,9 @@ interface FriendsProfileViewProps {
   onGoogleSignOut?: () => Promise<void>;
   onSwitchUser: (userId: string) => void;
   onToggleFriend: (friendId: string) => Promise<void>;
+  onToggleFollow?: (targetUserId: string) => Promise<void>;
+  onInspectProfile?: (userId: string) => void;
+  onOpenChatWithUser?: (userId: string) => void;
   onUpdateProfile: (patch: Partial<CollectorUser>) => Promise<void>;
   onUpdateCardVisibility: (cardId: string, visibility: VisibilityMode) => Promise<void>;
 }
@@ -55,6 +60,9 @@ export const FriendsProfileView: React.FC<FriendsProfileViewProps> = ({
   onGoogleSignOut,
   onSwitchUser,
   onToggleFriend,
+  onToggleFollow,
+  onInspectProfile,
+  onOpenChatWithUser,
   onUpdateProfile,
   onUpdateCardVisibility,
 }) => {
@@ -62,6 +70,7 @@ export const FriendsProfileView: React.FC<FriendsProfileViewProps> = ({
   const [bio, setBio] = useState(currentUser.bio);
   const [favoriteArtist, setFavoriteArtist] = useState(currentUser.favoriteArtist);
   const [savedFlag, setSavedFlag] = useState(false);
+  const [networkFilter, setNetworkFilter] = useState<'all' | 'followers' | 'friends'>('all');
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(() =>
     getCurrentGoogleUser()
   );
@@ -290,67 +299,181 @@ export const FriendsProfileView: React.FC<FriendsProfileViewProps> = ({
           </button>
         </form>
 
-        {/* Connect Friend Profiles */}
+        {/* Connect Friend & Follower Profiles */}
         <div className="lg:col-span-7 bg-[#131622] border border-white/10 rounded-3xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-fuchsia-400" />
-              <span>Unir Perfiles de Amigos</span>
+              <span>Amigos y Seguidores</span>
             </h3>
-            <span className="text-xs text-slate-400">
-              {currentUser.friends.length} conectados
-            </span>
+            <div className="flex items-center gap-1 p-1 bg-[#0B0D14] border border-white/10 rounded-xl text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setNetworkFilter('all')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  networkFilter === 'all'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Todos ({otherUsers.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setNetworkFilter('followers')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  networkFilter === 'followers'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Seguidores (
+                {
+                  otherUsers.filter((u) =>
+                    (u.following || u.friends).includes(currentUser.id)
+                  ).length
+                }
+                )
+              </button>
+              <button
+                type="button"
+                onClick={() => setNetworkFilter('friends')}
+                className={`px-2.5 py-1 rounded-lg transition-colors ${
+                  networkFilter === 'friends'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Amigos ({currentUser.friends.length})
+              </button>
+            </div>
           </div>
           <p className="text-xs text-slate-400">
-            Al conectar perfiles de amigos podrán ver las colecciones y álbumes marcados como "Solo Amigos".
+            Toca cualquier perfil para ver sus photocards, seguidores y creaciones, enviarle un mensaje directo o unir sus colecciones.
           </p>
 
           <div className="space-y-3">
-            {otherUsers.map((other) => {
-              const isFriend = currentUser.friends.includes(other.id);
-              const sharedCardsCount = cards.filter(
-                (c) =>
-                  c.ownerId === other.id &&
-                  (c.visibility === 'public' || (isFriend && c.visibility === 'friends'))
-              ).length;
+            {otherUsers
+              .filter((other) => {
+                if (networkFilter === 'followers') {
+                  return (other.following || other.friends).includes(currentUser.id);
+                }
+                if (networkFilter === 'friends') {
+                  return currentUser.friends.includes(other.id);
+                }
+                return true;
+              })
+              .map((other) => {
+                const isFriend = currentUser.friends.includes(other.id);
+                const isFollowing = (currentUser.following || currentUser.friends).includes(
+                  other.id
+                );
+                const followsMe = (other.following || other.friends).includes(currentUser.id);
+                const sharedCardsCount = cards.filter(
+                  (c) =>
+                    c.ownerId === other.id &&
+                    (c.visibility === 'public' || (isFriend && c.visibility === 'friends'))
+                ).length;
 
-              return (
-                <div
-                  key={other.id}
-                  className="p-4 rounded-2xl bg-[#0B0D14] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center font-display font-bold text-slate-950 shrink-0"
-                      style={{ backgroundColor: other.avatarColor }}
+                return (
+                  <div
+                    key={other.id}
+                    className="p-4 rounded-2xl bg-[#0B0D14] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onInspectProfile?.(other.id)}
+                      className="flex items-center gap-3 min-w-0 text-left group"
                     >
-                      {other.displayName.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-white truncate">
-                        {other.displayName} <span className="text-xs font-normal text-slate-400">{other.handle}</span>
+                      {other.photoUrl ? (
+                        <img
+                          src={other.photoUrl}
+                          alt={other.displayName}
+                          referrerPolicy="no-referrer"
+                          className="w-11 h-11 rounded-full object-cover border border-white/15 shrink-0"
+                        />
+                      ) : (
+                        <div
+                          className="w-11 h-11 rounded-full flex items-center justify-center font-display font-bold text-slate-950 shrink-0"
+                          style={{ backgroundColor: other.avatarColor }}
+                        >
+                          {other.displayName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-white group-hover:text-sky-300 transition-colors truncate">
+                          {other.displayName}{' '}
+                          <span className="text-xs font-normal text-slate-400">
+                            {other.handle}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400 truncate">
+                          {other.favoriteArtist} · {sharedCardsCount} cartas visibles
+                          {followsMe ? ' · Te sigue' : ''}
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-400 truncate">
-                        {other.favoriteArtist} · {sharedCardsCount} cartas visibles para ti
-                      </div>
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {onInspectProfile && (
+                        <button
+                          type="button"
+                          onClick={() => onInspectProfile(other.id)}
+                          className="min-h-[38px] px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-sky-300 flex items-center gap-1.5 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Ver Perfil</span>
+                        </button>
+                      )}
+
+                      {onOpenChatWithUser && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenChatWithUser(other.id)}
+                          className="min-h-[38px] px-3 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-400/35 text-xs font-semibold text-fuchsia-200 flex items-center gap-1.5 transition-colors"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>Chat</span>
+                        </button>
+                      )}
+
+                      {onToggleFollow && (
+                        <button
+                          type="button"
+                          onClick={() => void onToggleFollow(other.id)}
+                          className={`min-h-[38px] px-3 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                            isFollowing
+                              ? 'bg-sky-500/20 border border-sky-400/40 text-sky-200'
+                              : 'bg-white/10 hover:bg-white/15 text-white'
+                          }`}
+                        >
+                          <Heart
+                            className={`w-3.5 h-3.5 ${isFollowing ? 'fill-sky-300' : ''}`}
+                          />
+                          <span>{isFollowing ? 'Siguiendo' : 'Seguir'}</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleFriend(other.id)}
+                        className={`min-h-[38px] px-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 transition-colors ${
+                          isFriend
+                            ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
+                            : 'bg-white/10 hover:bg-white/15 text-white'
+                        }`}
+                      >
+                        {isFriend ? (
+                          <UserCheck className="w-4 h-4" />
+                        ) : (
+                          <UserPlus className="w-4 h-4" />
+                        )}
+                        <span>{isFriend ? 'Amigos Unidos' : 'Unir Amigo'}</span>
+                      </button>
                     </div>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onToggleFriend(other.id)}
-                    className={`min-h-[40px] px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 transition-colors ${
-                      isFriend
-                        ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300'
-                        : 'bg-white/10 hover:bg-white/15 text-white'
-                    }`}
-                  >
-                    {isFriend ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                    <span>{isFriend ? 'Amigos Unidos' : 'Unir Amigo'}</span>
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       </div>

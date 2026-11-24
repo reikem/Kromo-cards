@@ -1,11 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Camera,
   Check,
   Download,
   ImagePlus,
   Layers,
+  RefreshCw,
   Save,
   Sparkles,
+  SwitchCamera,
+  VideoOff,
   Wand2,
 } from 'lucide-react';
 import type {
@@ -22,7 +26,10 @@ interface CustomTextureStudioProps {
   currentUser: CollectorUser;
   textures: CustomTexture[];
   activeCustomTextureUrl?: string;
+  requestedMode?: 'create' | 'camera' | 'upload';
+  requestedModeNonce?: number;
   onApplyTextureUrl: (imageUrl: string, label?: string) => void;
+  onApplyFrontPhotoUrl?: (imageUrl: string) => void;
   onCreateTexture: (texture: Partial<CustomTexture>) => Promise<CustomTexture>;
   onNotifyToast: (msg: string) => void;
 }
@@ -87,11 +94,14 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
   currentUser,
   textures,
   activeCustomTextureUrl,
+  requestedMode,
+  requestedModeNonce,
   onApplyTextureUrl,
+  onApplyFrontPhotoUrl,
   onCreateTexture,
   onNotifyToast,
 }) => {
-  const [mode, setMode] = useState<'create' | 'upload'>('create');
+  const [mode, setMode] = useState<'create' | 'camera' | 'upload'>('create');
   const [patternType, setPatternType] =
     useState<Exclude<TexturePatternType, 'subida'>>('prisma');
   const [primaryColor, setPrimaryColor] = useState('#38BDF8');
@@ -104,7 +114,160 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
   const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
+  // Camera capture state
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [capturedCameraUrl, setCapturedCameraUrl] = useState<string>('');
+
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopCameraStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const startCameraStream = useCallback(
+    async (targetFacing: 'environment' | 'user' = facingMode) => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError(
+          'Tu navegador o contexto actual no permite acceder a la cámara del dispositivo.'
+        );
+        return;
+      }
+      stopCameraStream();
+      setCameraStarting(true);
+      setCameraError(null);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: targetFacing },
+            width: { ideal: 1080 },
+            height: { ideal: 1440 },
+          },
+          audio: false,
+        });
+        streamRef.current = stream;
+        setCameraActive(true);
+        window.requestAnimationFrame(() => {
+          if (videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+            void videoRef.current.play().catch(() => {
+              // autoplay handled via attribute
+            });
+          }
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (/Permission|NotAllowed|denied/i.test(msg)) {
+          setCameraError(
+            'Permiso de cámara denegado. Habilita el acceso a la cámara en tu navegador e inténtalo de nuevo.'
+          );
+        } else if (/NotFound|DevicesNotFound/i.test(msg)) {
+          setCameraError('No se detectó ninguna cámara disponible en este dispositivo.');
+        } else {
+          setCameraError('No se pudo iniciar la cámara en vivo. Intenta recargar o cambiar de lente.');
+        }
+      } finally {
+        setCameraStarting(false);
+      }
+    },
+    [facingMode, stopCameraStream]
+  );
+
+  // Sync external mode trigger (e.g., from Studio "Foto" tab shortcut)
+  useEffect(() => {
+    if (!requestedMode) return;
+    setMode(requestedMode);
+    if (requestedMode === 'camera' && !capturedCameraUrl) {
+      void startCameraStream(facingMode);
+    }
+  }, [requestedMode, requestedModeNonce]);
+
+  // Cleanup camera when leaving camera mode or unmounting
+  useEffect(() => {
+    if (mode !== 'camera') {
+      stopCameraStream();
+    }
+  }, [mode, stopCameraStream]);
+
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, [stopCameraStream]);
+
+  // Attach stream if videoRef mounts slightly after cameraActive toggles
+  useEffect(() => {
+    if (cameraActive && videoRef.current && streamRef.current && !videoRef.current.srcObject) {
+      videoRef.current.srcObject = streamRef.current;
+      void videoRef.current.play().catch(() => {
+        // ignore
+      });
+    }
+  }, [cameraActive]);
+
+  const handleCaptureCameraFrame = () => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      onNotifyToast('Espera un instante a que la cámara enfoque antes de capturar.');
+      return;
+    }
+
+    const targetW = 720;
+    const targetH = 1008;
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const targetRatio = targetW / targetH;
+    const videoRatio = vw / vh;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = vw;
+    let sh = vh;
+
+    if (videoRatio > targetRatio) {
+      sw = vh * targetRatio;
+      sx = (vw - sw) / 2;
+    } else {
+      sh = vw / targetRatio;
+      sy = (vh - sh) / 2;
+    }
+
+    if (facingMode === 'user') {
+      ctx.save();
+      ctx.translate(targetW, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, targetW, targetH);
+    }
+
+    const dataUrl = canvas.toDataURL('image/png');
+    setCapturedCameraUrl(dataUrl);
+    if (!textureName.trim()) {
+      setTextureName(`Textura Cámara ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
+    }
+    stopCameraStream();
+    onApplyTextureUrl(dataUrl, 'Textura Cámara Anverso');
+    onNotifyToast('Foto capturada y aplicada directamente como textura del anverso.');
+  };
 
   const renderProceduralTexture = (
     canvas: HTMLCanvasElement,
@@ -268,23 +431,34 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
     if (mode === 'create') {
       return buildHighResCreatedDataUrl();
     }
+    if (mode === 'camera') {
+      return capturedCameraUrl || null;
+    }
     return uploadedPreviewUrl || null;
   };
 
   const handleApplyDraft = () => {
     const url = getActiveDraftImageUrl();
     if (!url) {
-      onNotifyToast('Primero sube o selecciona una imagen para tu textura.');
+      onNotifyToast(
+        mode === 'camera'
+          ? 'Primero toma una foto con la cámara para usarla como textura.'
+          : 'Primero sube o selecciona una imagen para tu textura.'
+      );
       return;
     }
     onApplyTextureUrl(url, textureName.trim() || 'Textura Personalizada');
-    onNotifyToast('Textura personalizada aplicada a tu carta 3D.');
+    onNotifyToast('Textura personalizada aplicada al anverso de tu carta 3D.');
   };
 
   const handleSaveAndShareTexture = async () => {
     const url = getActiveDraftImageUrl();
     if (!url) {
-      onNotifyToast('Primero crea o carga una textura.');
+      onNotifyToast(
+        mode === 'camera'
+          ? 'Captura primero una foto con la cámara.'
+          : 'Primero crea o carga una textura.'
+      );
       return;
     }
     setSaving(true);
@@ -293,7 +467,9 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
         textureName.trim() ||
         (mode === 'create'
           ? `${PATTERN_PRESETS.find((p) => p.id === patternType)?.label || 'Holo'} Propia`
-          : 'Textura Subida');
+          : mode === 'camera'
+            ? 'Textura Cámara Anverso'
+            : 'Textura Subida');
       const created = await onCreateTexture({
         name,
         imageUrl: url,
@@ -320,12 +496,12 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
   const handleExportCurrentPng = async () => {
     const url = getActiveDraftImageUrl();
     if (!url) {
-      onNotifyToast('Crea o carga una textura para poder exportarla en PNG.');
+      onNotifyToast('Crea, captura o carga una textura para poder exportarla en PNG.');
       return;
     }
     await exportTextureImageAsPng(
       url,
-      textureName.trim() || `textura-${patternType}`
+      textureName.trim() || `textura-${mode === 'camera' ? 'camara' : patternType}`
     );
     onNotifyToast('Textura exportada en PNG de alta resolución.');
   };
@@ -336,14 +512,14 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
         <div>
           <h4 className="font-display text-sm font-bold text-white flex items-center gap-2">
             <Wand2 className="w-4 h-4 text-sky-400" />
-            <span>Taller de Texturas Propias (Crear, Subir y Exportar)</span>
+            <span>Taller de Texturas Propias (Crear, Cámara y Subir)</span>
           </h4>
           <p className="text-[11px] text-slate-400">
-            Diseña láminas holográficas desde cero, impórtalas o expórtalas directamente a tu Google Drive y PNG.
+            Diseña láminas holográficas, captura directamente con tu cámara como textura del anverso o sube archivos.
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-[#131622] border border-white/10 rounded-xl">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#131622] border border-white/10 rounded-xl">
           <button
             type="button"
             onClick={() => setMode('create')}
@@ -358,6 +534,18 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setMode('camera')}
+            className={`min-h-[34px] px-3 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 ${
+              mode === 'camera'
+                ? 'bg-emerald-400 text-slate-950'
+                : 'text-slate-300 hover:text-white'
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>Cámara</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setMode('upload')}
             className={`min-h-[34px] px-3 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 ${
               mode === 'upload'
@@ -366,7 +554,7 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
             }`}
           >
             <ImagePlus className="w-3.5 h-3.5" />
-            <span>Agregar / Subir</span>
+            <span>Subir</span>
           </button>
         </div>
       </div>
@@ -452,6 +640,144 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
                 />
               </label>
             </div>
+          </div>
+        </div>
+      ) : mode === 'camera' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+          <div className="sm:col-span-5 flex flex-col items-center gap-2">
+            <div className="relative w-44 aspect-[54/76] rounded-2xl border border-emerald-400/35 bg-[#131622] overflow-hidden shadow-lg flex items-center justify-center">
+              {cameraActive ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${
+                      facingMode === 'user' ? '-scale-x-100' : ''
+                    }`}
+                  />
+                  <div className="pointer-events-none absolute inset-2 rounded-xl border border-dashed border-white/40" />
+                </>
+              ) : capturedCameraUrl ? (
+                <img
+                  src={capturedCameraUrl}
+                  alt="Foto capturada para textura del anverso"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="p-4 text-center space-y-2">
+                  <Camera className="w-8 h-8 text-emerald-400 mx-auto" />
+                  <p className="text-[11px] text-slate-300 leading-snug">
+                    Enciende tu cámara para tomar una textura directa al anverso.
+                  </p>
+                </div>
+              )}
+            </div>
+            <span className="text-[10px] text-slate-400 text-center">
+              Encuadre automático 54×76 mm sin subir archivos
+            </span>
+          </div>
+
+          <div className="sm:col-span-7 space-y-3">
+            <div className="p-3 rounded-xl bg-[#131622] border border-white/10 space-y-1">
+              <div className="text-xs font-bold text-white">
+                Captura en Vivo → Textura del Anverso
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Apunta a luces de concierto, papel brillante, telas o una foto directa. Al capturar se aplica al instante sobre el frente de tu carta 3D.
+              </p>
+            </div>
+
+            {cameraError && (
+              <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-400/30 text-[11px] text-rose-200">
+                {cameraError}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {!cameraActive ? (
+                <button
+                  type="button"
+                  disabled={cameraStarting}
+                  onClick={() => void startCameraStream(facingMode)}
+                  className="min-h-[40px] px-4 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>
+                    {cameraStarting
+                      ? 'Abriendo cámara...'
+                      : capturedCameraUrl
+                        ? 'Tomar otra foto'
+                        : 'Encender Cámara'}
+                  </span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCaptureCameraFrame}
+                    className="min-h-[40px] px-4 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Capturar como Textura</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = facingMode === 'environment' ? 'user' : 'environment';
+                      setFacingMode(next);
+                      void startCameraStream(next);
+                    }}
+                    className="min-h-[40px] px-3 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center gap-1.5"
+                  >
+                    <SwitchCamera className="w-4 h-4 text-sky-400" />
+                    <span>Cambiar Lente</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopCameraStream}
+                    className="min-h-[40px] px-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5"
+                  >
+                    <VideoOff className="w-4 h-4 text-rose-300" />
+                    <span>Detener</span>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {capturedCameraUrl && !cameraActive && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onApplyTextureUrl(
+                      capturedCameraUrl,
+                      textureName.trim() || 'Textura Cámara Anverso'
+                    );
+                    onNotifyToast('Foto aplicada como textura del anverso.');
+                  }}
+                  className="min-h-[36px] px-3 rounded-xl bg-sky-500/20 border border-sky-400/40 text-sky-200 text-[11px] font-semibold flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Aplicar como Textura Anverso</span>
+                </button>
+
+                {onApplyFrontPhotoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onApplyFrontPhotoUrl(capturedCameraUrl);
+                      onNotifyToast('Captura aplicada también como foto principal del anverso.');
+                    }}
+                    className="min-h-[36px] px-3 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/40 text-fuchsia-200 text-[11px] font-semibold flex items-center gap-1.5"
+                  >
+                    <ImagePlus className="w-3.5 h-3.5" />
+                    <span>Usar como Foto Principal</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : (

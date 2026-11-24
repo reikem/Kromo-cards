@@ -243,6 +243,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [musicLinkUrl, setMusicLinkUrl] = useState(editingCard?.musicLinkUrl || '');
   const [musicQrPreviewUrl, setMusicQrPreviewUrl] = useState('');
   const [holoCategory, setHoloCategory] = useState<'all' | 'clasico' | 'festivo'>('all');
+  const [requestedTextureMode, setRequestedTextureMode] = useState<'create' | 'camera' | 'upload'>('create');
+  const [requestedTextureNonce, setRequestedTextureNonce] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
 
@@ -732,6 +734,36 @@ export const StudioView: React.FC<StudioViewProps> = ({
               onNotifyToast={onNotifyToast}
             />
 
+            <div className="p-3.5 rounded-2xl bg-emerald-500/[0.08] border border-emerald-400/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Capturar textura del anverso con tu cámara</span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Toma una foto en vivo sin cargar archivos y úsala directamente sobre el frente de tu carta 3D.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('frame');
+                  setPreviewSide('front');
+                  setRequestedTextureMode('camera');
+                  setRequestedTextureNonce((n) => n + 1);
+                  window.setTimeout(() => {
+                    document
+                      .getElementById('studio-textures-panel')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 120);
+                }}
+                className="min-h-[38px] px-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 transition-colors"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Abrir Cámara para Anverso</span>
+              </button>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#0B0D14] border border-white/10">
               <div className="flex items-center gap-3 min-w-0">
                 <img
@@ -1081,13 +1113,19 @@ export const StudioView: React.FC<StudioViewProps> = ({
               </div>
             </div>
 
-            {/* Custom Texture Creator, Uploader (incl. Google Drive) & PNG Exporter */}
+            {/* Custom Texture Creator, Camera Capture, Uploader (incl. Google Drive) & PNG Exporter */}
             <CustomTextureStudio
               currentUser={currentUser}
               textures={textures}
               activeCustomTextureUrl={customTextureUrl}
+              requestedMode={requestedTextureMode}
+              requestedModeNonce={requestedTextureNonce}
               onApplyTextureUrl={(imageUrl) => {
                 setCustomTextureUrl(imageUrl);
+                setPreviewSide('front');
+              }}
+              onApplyFrontPhotoUrl={(imageUrl) => {
+                setPhotoUrl(imageUrl);
                 setPreviewSide('front');
               }}
               onCreateTexture={onCreateTexture}
@@ -1195,9 +1233,26 @@ export const StudioView: React.FC<StudioViewProps> = ({
             </div>
             </div>
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-semibold text-sky-300">
-                  Capas Traseras · Estadios en Concierto 3D
+                  Fondos y Escenarios 3D ({Array.from(
+                    new Map(
+                      [
+                        ...backdrops.map((b) => ({
+                          id: b.id,
+                          name: b.name,
+                          imageUrl: b.imageUrl,
+                          atmosphere: b.atmosphere,
+                        })),
+                        ...STADIUM_BACKDROPS.map((b) => ({
+                          id: b.id,
+                          name: b.label,
+                          imageUrl: b.imageUrl,
+                          atmosphere: b.atmosphere,
+                        })),
+                      ].map((item) => [item.imageUrl, item])
+                    ).values()
+                  ).length} disponibles)
                 </span>
                 {backBackdropUrl && (
                   <button
@@ -1205,51 +1260,101 @@ export const StudioView: React.FC<StudioViewProps> = ({
                     onClick={() => setBackBackdropUrl('')}
                     className="text-[11px] text-slate-400 hover:text-white"
                   >
-                    Quitar fondo
+                    Quitar fondo trasero
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                {(backdrops.length > 0 ? backdrops : STADIUM_BACKDROPS.map((b) => ({
-                  id: b.id,
-                  name: b.label,
-                  imageUrl: b.imageUrl,
-                  atmosphere: b.atmosphere,
-                }))).map((bg) => {
-                  const selected = backBackdropUrl === bg.imageUrl;
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-96 overflow-y-auto pr-1">
+                {Array.from(
+                  new Map(
+                    [
+                      ...backdrops.map((b) => ({
+                        id: b.id,
+                        name: b.name,
+                        imageUrl: b.imageUrl,
+                        atmosphere: b.atmosphere,
+                      })),
+                      ...STADIUM_BACKDROPS.map((b) => ({
+                        id: b.id,
+                        name: b.label,
+                        imageUrl: b.imageUrl,
+                        atmosphere: b.atmosphere,
+                      })),
+                    ].map((item) => [item.imageUrl, item])
+                  ).values()
+                ).map((bg) => {
+                  const selectedBack = backBackdropUrl === bg.imageUrl;
+                  const selectedFront = customTextureUrl === bg.imageUrl;
                   return (
-                    <button
+                    <div
                       key={bg.id}
-                      type="button"
-                      onClick={() => setBackBackdropUrl(selected ? '' : bg.imageUrl)}
                       className={`group rounded-2xl overflow-hidden border text-left transition-all ${
-                        selected
+                        selectedBack || selectedFront
                           ? 'border-sky-400 ring-2 ring-sky-400/40 bg-sky-500/10'
                           : 'border-white/10 bg-[#0B0D14] hover:border-white/25'
                       }`}
                     >
-                      <div className="relative h-20 w-full overflow-hidden bg-black">
-                        <img
-                          src={bg.imageUrl}
-                          alt={bg.name}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                        {selected && (
-                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center">
-                            <Check className="w-3 h-3" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBackBackdropUrl(selectedBack ? '' : bg.imageUrl);
+                          setPreviewSide('back');
+                        }}
+                        className="w-full text-left"
+                      >
+                        <div className="relative h-20 w-full overflow-hidden bg-black">
+                          <img
+                            src={bg.imageUrl}
+                            alt={bg.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          {(selectedBack || selectedFront) && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center">
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2 pb-1">
+                          <div className="text-[11px] font-bold text-white truncate">
+                            {bg.name}
                           </div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <div className="text-[11px] font-bold text-white truncate">
-                          {bg.name}
+                          <div className="text-[10px] text-slate-400 truncate">
+                            {bg.atmosphere}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400 truncate">
-                          {bg.atmosphere}
-                        </div>
+                      </button>
+                      <div className="px-2 pb-2 grid grid-cols-2 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBackBackdropUrl(selectedBack ? '' : bg.imageUrl);
+                            setPreviewSide('back');
+                          }}
+                          className={`min-h-[26px] rounded-lg text-[10px] font-semibold transition-colors ${
+                            selectedBack
+                              ? 'bg-sky-500 text-slate-950'
+                              : 'bg-white/5 hover:bg-white/10 text-sky-300'
+                          }`}
+                        >
+                          Reverso
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomTextureUrl(selectedFront ? undefined : bg.imageUrl);
+                            setPreviewSide('front');
+                          }}
+                          className={`min-h-[26px] rounded-lg text-[10px] font-semibold transition-colors ${
+                            selectedFront
+                              ? 'bg-fuchsia-400 text-slate-950'
+                              : 'bg-white/5 hover:bg-white/10 text-fuchsia-300'
+                          }`}
+                        >
+                          Anverso
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

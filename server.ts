@@ -2,10 +2,12 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import express from 'express';
+import * as webpush from 'web-push';
 import { WebSocketServer, WebSocket } from 'ws';
 import type {
   Album,
   BootstrapPayload,
+  ChatMessage,
   CollectorUser,
   ConcertBanner,
   CustomBackdrop,
@@ -22,6 +24,75 @@ import type {
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const STORE_PATH = path.join(DATA_DIR, 'store.json');
+const VAPID_KEYS_PATH = path.join(DATA_DIR, 'vapid-keys.json');
+const PUSH_SUBS_PATH = path.join(DATA_DIR, 'push-subscriptions.json');
+
+interface StoredPushSubscription {
+  userId: string;
+  subscription: webpush.PushSubscription;
+  updatedAt: string;
+}
+
+function loadOrCreateVapidKeys(): { publicKey: string; privateKey: string; subject: string } {
+  const envPublic = (process.env.VAPID_PUBLIC_KEY || '').trim();
+  const envPrivate = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  const subject = (process.env.VAPID_SUBJECT || 'mailto:notifications@kromacard.app').trim();
+
+  if (envPublic && envPrivate) {
+    return { publicKey: envPublic, privateKey: envPrivate, subject };
+  }
+
+  try {
+    if (fs.existsSync(VAPID_KEYS_PATH)) {
+      const saved = JSON.parse(fs.readFileSync(VAPID_KEYS_PATH, 'utf-8')) as {
+        publicKey?: string;
+        privateKey?: string;
+      };
+      if (saved.publicKey && saved.privateKey) {
+        return { publicKey: saved.publicKey, privateKey: saved.privateKey, subject };
+      }
+    }
+  } catch {
+    // regenerate below if unreadable
+  }
+
+  const generated = webpush.generateVAPIDKeys();
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(
+      VAPID_KEYS_PATH,
+      JSON.stringify({ publicKey: generated.publicKey, privateKey: generated.privateKey }, null, 2),
+      { mode: 0o600 },
+    );
+  } catch {
+    // non-fatal; keep in memory
+  }
+  return { publicKey: generated.publicKey, privateKey: generated.privateKey, subject };
+}
+
+function isValidWebPushSubscription(sub: unknown): sub is webpush.PushSubscription {
+  if (!sub || typeof sub !== 'object') return false;
+  const candidate = sub as Partial<webpush.PushSubscription>;
+  if (typeof candidate.endpoint !== 'string' || !candidate.endpoint.trim()) return false;
+  try {
+    const parsed = new URL(candidate.endpoint);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  const keys = candidate.keys;
+  if (!keys || typeof keys !== 'object') return false;
+  return (
+    typeof keys.p256dh === 'string' &&
+    keys.p256dh.trim().length > 10 &&
+    typeof keys.auth === 'string' &&
+    keys.auth.trim().length > 6
+  );
+}
 
 function getFirebaseWebApiKey(): string {
   try {
@@ -92,6 +163,7 @@ function createSeedData(): BootstrapPayload {
       bio: 'Coleccionista de photocards de giras en vivo, carteles hechos a mano y recuerdos familiares.',
       favoriteArtist: 'Coldplay & Indie Pop',
       friends: ['user-mateo', 'user-luna'],
+      following: ['user-mateo', 'user-luna'],
     },
     {
       id: 'user-mateo',
@@ -101,6 +173,7 @@ function createSeedData(): BootstrapPayload {
       bio: 'Diseño cartas doradas edición limitada de fútbol, goles históricos y noches de copa.',
       favoriteArtist: 'Fútbol Leyendas',
       friends: ['user-sofia'],
+      following: ['user-sofia', 'user-luna'],
     },
     {
       id: 'user-luna',
@@ -110,6 +183,7 @@ function createSeedData(): BootstrapPayload {
       bio: 'Archivista de conciertos, pulseras LED y setlists acústicos. Abierta a trueques verificados.',
       favoriteArtist: 'Arena Pop Tour',
       friends: ['user-sofia'],
+      following: ['user-sofia', 'user-mateo'],
     },
   ];
 
@@ -597,6 +671,35 @@ function createSeedData(): BootstrapPayload {
       read: false,
       createdAt: '2024-10-27T08:40:00.000Z',
     },
+    {
+      id: 'notif-chat-seed-1',
+      userId: 'user-sofia',
+      title: 'Nuevo mensaje de Luna Chen',
+      message: '¡Bienvenidos a la Sala de Amigos! Ya subí nuevos fondos Cyberpunk y Sakura para las photocards.',
+      kind: 'chat',
+      relatedRoomId: 'friends-lounge',
+      relatedUserId: 'user-luna',
+      read: false,
+      createdAt: '2024-11-20T18:05:00.000Z',
+    },
+  ];
+
+  const chatMessages: ChatMessage[] = [
+    {
+      id: 'msg-seed-1',
+      roomId: 'friends-lounge',
+      senderId: 'user-luna',
+      text: '¡Hola! Ya subí nuevos fondos Cyberpunk y Cielo Sakura a la biblioteca para nuestras photocards de concierto.',
+      cardId: 'card-arena-01',
+      createdAt: '2024-11-20T18:05:00.000Z',
+    },
+    {
+      id: 'msg-seed-2',
+      roomId: 'friends-lounge',
+      senderId: 'user-mateo',
+      text: '¡El fondo Eclipse Dorado queda increíble con mis cartas edición torneo! ¿Quién arma trueque hoy?',
+      createdAt: '2024-11-20T18:09:00.000Z',
+    },
   ];
 
   const textures: CustomTexture[] = [
@@ -762,9 +865,9 @@ function createSeedData(): BootstrapPayload {
   const backdrops: CustomBackdrop[] = [
     {
       id: 'bg-seed-cyan-magenta',
-      name: 'Estadio Prisma Neón',
-      imageUrl: '/src/assets/images/stadium_backdrop_cyan_magenta_1795355312437.jpg',
-      atmosphere: 'Reflectores láser cian y magenta',
+      name: 'Estadio Láser Cian',
+      imageUrl: '/src/assets/images/stadium_blue_lasers_1795356119795.jpg',
+      atmosphere: 'Reflectores láser cian y pulseras LED',
       category: 'musica',
       authorId: 'system',
       authorName: 'Kromacard',
@@ -774,8 +877,8 @@ function createSeedData(): BootstrapPayload {
     },
     {
       id: 'bg-seed-gold-fireworks',
-      name: 'Encore Dorado & Fuegos',
-      imageUrl: '/src/assets/images/stadium_backdrop_gold_fireworks_1795355313097.jpg',
+      name: 'Encore Pirotecnia Oro',
+      imageUrl: '/src/assets/images/stadium_golden_pyro_1795356122266.jpg',
       atmosphere: 'Pirotecnia dorada sobre estadio lleno',
       category: 'celebraciones',
       authorId: 'user-mateo',
@@ -786,9 +889,9 @@ function createSeedData(): BootstrapPayload {
     },
     {
       id: 'bg-seed-purple-galaxy',
-      name: 'Arena Galaxia Violeta',
-      imageUrl: '/src/assets/images/stadium_backdrop_purple_galaxy_1795355313179.jpg',
-      atmosphere: 'Mar de lightsticks y humo neón',
+      name: 'Encore Magenta Arena',
+      imageUrl: '/src/assets/images/stadium_magenta_encore_1795356119636.jpg',
+      atmosphere: 'Niebla violeta, lightsticks y confeti',
       category: 'eventos',
       authorId: 'user-luna',
       authorName: 'Luna Chen',
@@ -798,9 +901,9 @@ function createSeedData(): BootstrapPayload {
     },
     {
       id: 'bg-seed-emerald-electric',
-      name: 'Tormenta Esmeralda VIP',
-      imageUrl: '/src/assets/images/stadium_backdrop_emerald_electric_1795355313366.jpg',
-      atmosphere: 'Focos nocturnos de festival al aire libre',
+      name: 'Domo Neón Nocturno',
+      imageUrl: '/src/assets/images/stadium_neon_rain_1795356121959.jpg',
+      atmosphere: 'Focos turquesa y lluvia de estadio',
       category: 'deportes',
       authorId: 'system',
       authorName: 'Kromacard',
@@ -810,15 +913,99 @@ function createSeedData(): BootstrapPayload {
     },
     {
       id: 'bg-seed-sunset-confetti',
-      name: 'Atardecer & Confeti',
-      imageUrl: '/src/assets/images/stadium_backdrop_sunset_confetti_1795355313250.jpg',
-      atmosphere: 'Hora dorada y lluvia de confeti',
+      name: 'Atardecer Festival Tour',
+      imageUrl: '/src/assets/images/stadium_sunset_festival_1795356122086.jpg',
+      atmosphere: 'Hora dorada rosada y focos cobalto',
       category: 'celebraciones',
       authorId: 'user-sofia',
       authorName: 'Sofía Martínez',
       isPublic: true,
       likes: 101,
       createdAt: '2024-11-01T18:00:00.000Z',
+    },
+    {
+      id: 'bg-seed-cyberpunk-neon',
+      name: 'Cyberpunk Arcade Neón',
+      imageUrl: '/src/assets/images/backdrop_cyberpunk_neon_1795556031098.jpg',
+      atmosphere: 'Rejilla futurista cian, magenta y reflejos de lluvia',
+      category: 'fantasia',
+      authorId: 'user-luna',
+      authorName: 'Luna Chen',
+      isPublic: true,
+      likes: 124,
+      createdAt: '2024-11-18T12:00:00.000Z',
+    },
+    {
+      id: 'bg-seed-sakura-night',
+      name: 'Cielo Sakura Nocturno',
+      imageUrl: '/src/assets/images/backdrop_sakura_night_1795556030949.jpg',
+      atmosphere: 'Pétalos de cerezo luminosos bajo luna creciente',
+      category: 'celebraciones',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      likes: 132,
+      createdAt: '2024-11-19T14:30:00.000Z',
+    },
+    {
+      id: 'bg-seed-solar-eclipse',
+      name: 'Eclipse Solar Dorado',
+      imageUrl: '/src/assets/images/backdrop_solar_eclipse_1795556031893.jpg',
+      atmosphere: 'Corona solar ámbar y anillos de polvo estelar',
+      category: 'edicion-limitada',
+      authorId: 'user-mateo',
+      authorName: 'Mateo Rivera',
+      isPublic: true,
+      likes: 118,
+      createdAt: '2024-11-20T09:15:00.000Z',
+    },
+    {
+      id: 'bg-seed-crystal-cavern',
+      name: 'Caverna Cristal Prisma',
+      imageUrl: '/src/assets/images/backdrop_crystal_cavern_1795556031959.jpg',
+      atmosphere: 'Geodas amatista, esmeralda y destellos arcoíris',
+      category: 'fantasia',
+      authorId: 'system',
+      authorName: 'Kromacard',
+      isPublic: true,
+      likes: 110,
+      createdAt: '2024-11-20T16:00:00.000Z',
+    },
+    {
+      id: 'bg-seed-winter-aurora',
+      name: 'Aurora Boreal Estelar',
+      imageUrl: '/src/assets/images/holo_winter_aurora_bg_1795356978248.jpg',
+      atmosphere: 'Cortinas polares esmeralda y cielo nocturno',
+      category: 'fantasia',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      likes: 94,
+      createdAt: '2024-11-21T10:00:00.000Z',
+    },
+    {
+      id: 'bg-seed-cosmos-galaxy',
+      name: 'Galaxia Cósmica Profunda',
+      imageUrl: '/src/assets/images/holo_cosmos_galaxy_1795356018724.jpg',
+      atmosphere: 'Nebulosa estelar violeta y brillo sideral',
+      category: 'fantasia',
+      authorId: 'user-luna',
+      authorName: 'Luna Chen',
+      isPublic: true,
+      likes: 97,
+      createdAt: '2024-11-21T11:30:00.000Z',
+    },
+    {
+      id: 'bg-seed-fireworks-gala',
+      name: 'Gala Fuegos Artificiales',
+      imageUrl: '/src/assets/images/holo_fireworks_gala_1795356579735.jpg',
+      atmosphere: 'Explosiones doradas de celebración nocturna',
+      category: 'celebraciones',
+      authorId: 'user-mateo',
+      authorName: 'Mateo Rivera',
+      isPublic: true,
+      likes: 105,
+      createdAt: '2024-11-21T13:00:00.000Z',
     },
   ];
 
@@ -834,7 +1021,24 @@ function createSeedData(): BootstrapPayload {
     backdrops,
     trades,
     notifications,
+    chatMessages,
   };
+}
+
+function repairLegacyBackdropUrl(url: string): string {
+  const map: Record<string, string> = {
+    '/src/assets/images/stadium_backdrop_cyan_magenta_1795355312437.jpg':
+      '/src/assets/images/stadium_blue_lasers_1795356119795.jpg',
+    '/src/assets/images/stadium_backdrop_gold_fireworks_1795355313097.jpg':
+      '/src/assets/images/stadium_golden_pyro_1795356122266.jpg',
+    '/src/assets/images/stadium_backdrop_purple_galaxy_1795355313179.jpg':
+      '/src/assets/images/stadium_magenta_encore_1795356119636.jpg',
+    '/src/assets/images/stadium_backdrop_emerald_electric_1795355313366.jpg':
+      '/src/assets/images/stadium_neon_rain_1795356121959.jpg',
+    '/src/assets/images/stadium_backdrop_sunset_confetti_1795355313250.jpg':
+      '/src/assets/images/stadium_sunset_festival_1795356122086.jpg',
+  };
+  return map[url] || url;
 }
 
 function loadStore(): BootstrapPayload {
@@ -853,6 +1057,29 @@ function loadStore(): BootstrapPayload {
         }
         if (!Array.isArray(parsed.backdrops) || parsed.backdrops.length === 0) {
           parsed.backdrops = seed.backdrops;
+        } else {
+          parsed.backdrops = parsed.backdrops.map((b) => ({
+            ...b,
+            imageUrl: repairLegacyBackdropUrl(b.imageUrl),
+          }));
+          const existingIds = new Set(parsed.backdrops.map((b) => b.id));
+          for (const sb of seed.backdrops) {
+            if (!existingIds.has(sb.id)) {
+              parsed.backdrops.push(sb);
+            }
+          }
+        }
+        parsed.users = parsed.users.map((u) => ({
+          ...u,
+          friends: Array.isArray(u.friends) ? u.friends : [],
+          following: Array.isArray(u.following)
+            ? u.following
+            : Array.isArray(u.friends)
+              ? [...u.friends]
+              : [],
+        }));
+        if (!Array.isArray(parsed.chatMessages) || parsed.chatMessages.length === 0) {
+          parsed.chatMessages = seed.chatMessages;
         }
         parsed.stickers = (parsed.stickers || []).map((stk, i) => ({
           ...stk,
@@ -867,6 +1094,9 @@ function loadStore(): BootstrapPayload {
         }));
         parsed.cards = parsed.cards.map((c, i) => ({
           ...c,
+          backBackdropUrl: c.backBackdropUrl
+            ? repairLegacyBackdropUrl(c.backBackdropUrl)
+            : c.backBackdropUrl,
           tradeCategory:
             c.tradeCategory ||
             (c.frameStyle === 'gold' ? 'deportes' : c.concert?.enabled ? 'musica' : 'eventos'),
@@ -902,11 +1132,92 @@ async function startServer() {
   app.use(express.json({ limit: '18mb' }));
 
   const server = http.createServer(app);
-  const wss = new WebSocketServer({ server, path: '/ws' });
-  const pushSubscriptions = new Map<
-    string,
-    { endpoint: string; enabled: boolean; updatedAt: string }
-  >();
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on('upgrade', (req, socket, head) => {
+    try {
+      const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+      if (pathname === '/ws') {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      }
+    } catch {
+      socket.destroy();
+    }
+  });
+  const vapidConfig = loadOrCreateVapidKeys();
+  webpush.setVapidDetails(vapidConfig.subject, vapidConfig.publicKey, vapidConfig.privateKey);
+
+  const loadPushSubscriptions = (): StoredPushSubscription[] => {
+    try {
+      if (fs.existsSync(PUSH_SUBS_PATH)) {
+        const parsed = JSON.parse(fs.readFileSync(PUSH_SUBS_PATH, 'utf-8'));
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (item): item is StoredPushSubscription =>
+              Boolean(item && typeof item.userId === 'string' && isValidWebPushSubscription(item.subscription)),
+          );
+        }
+      }
+    } catch {
+      // ignore corrupted file
+    }
+    return [];
+  };
+
+  let pushSubscriptionList: StoredPushSubscription[] = loadPushSubscriptions();
+
+  const savePushSubscriptions = () => {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(PUSH_SUBS_PATH, JSON.stringify(pushSubscriptionList, null, 2));
+    } catch {
+      // ignore disk write errors
+    }
+  };
+
+  const sendWebPushToUser = async (
+    userId: string,
+    payload: {
+      title: string;
+      body: string;
+      url?: string;
+      tag?: string;
+      kind?: 'trade' | 'gift' | 'chat';
+      tradeId?: string;
+      roomId?: string;
+    },
+  ) => {
+    const targets = pushSubscriptionList.filter((item) => item.userId === userId);
+    if (targets.length === 0) return;
+
+    const encodedPayload = JSON.stringify(payload);
+    let pruned = false;
+
+    await Promise.all(
+      targets.map(async (entry) => {
+        try {
+          await webpush.sendNotification(entry.subscription, encodedPayload, { TTL: 86400 });
+        } catch (err: unknown) {
+          const statusCode =
+            err && typeof err === 'object' && 'statusCode' in err
+              ? Number((err as { statusCode?: number }).statusCode)
+              : 0;
+          if (statusCode === 404 || statusCode === 410) {
+            pushSubscriptionList = pushSubscriptionList.filter(
+              (item) => !(item.userId === userId && item.subscription.endpoint === entry.subscription.endpoint),
+            );
+            pruned = true;
+          }
+        }
+      }),
+    );
+
+    if (pruned) {
+      savePushSubscriptions();
+    }
+  };
 
   function broadcast(event: string, payload: unknown) {
     const msg = JSON.stringify({ event, payload });
@@ -1300,27 +1611,32 @@ async function startServer() {
 
   // Friends toggle
   app.post('/api/friends/toggle', (req, res) => {
-    const { userId, friendId } = req.body as { userId: string; friendId: string };
+    const { userId, friendId } = req.body as { userId?: string; friendId?: string };
     const user = store.users.find((u) => u.id === userId);
     const friend = store.users.find((u) => u.id === friendId);
     if (!user || !friend || userId === friendId) {
       return res.status(400).json({ error: 'Usuarios inválidos.' });
     }
-    const isAlready = user.friends.includes(friendId);
+    const isAlready = user.friends.includes(friendId!);
     if (isAlready) {
       user.friends = user.friends.filter((id) => id !== friendId);
       friend.friends = friend.friends.filter((id) => id !== userId);
     } else {
-      user.friends.push(friendId);
-      if (!friend.friends.includes(userId)) {
-        friend.friends.push(userId);
+      user.friends.push(friendId!);
+      if (!friend.friends.includes(userId!)) {
+        friend.friends.push(userId!);
+      }
+      const userFollowing = user.following || [];
+      if (!userFollowing.includes(friendId!)) {
+        user.following = [...userFollowing, friendId!];
       }
       const notif: RealtimeNotification = {
         id: `notif-${Date.now()}`,
-        userId: friendId,
+        userId: friendId!,
         title: 'Nueva conexión de amistad',
         message: `${user.displayName} ahora está conectado contigo. Ya pueden ver sus álbumes "Solo Amigos".`,
         kind: 'community',
+        relatedUserId: user.id,
         read: false,
         createdAt: new Date().toISOString(),
       };
@@ -1330,6 +1646,157 @@ async function startServer() {
     saveStore();
     broadcast('users:updated', store.users);
     return res.json({ users: store.users });
+  });
+
+  // Follow / Unfollow collector toggle
+  app.post('/api/follow/toggle', (req, res) => {
+    const { userId, targetUserId } = req.body as { userId?: string; targetUserId?: string };
+    const user = store.users.find((u) => u.id === userId);
+    const target = store.users.find((u) => u.id === targetUserId);
+    if (!user || !target || userId === targetUserId) {
+      return res.status(400).json({ error: 'Usuarios inválidos para seguir.' });
+    }
+    const currentFollowing = Array.isArray(user.following) ? user.following : [];
+    const alreadyFollowing = currentFollowing.includes(targetUserId!);
+    if (alreadyFollowing) {
+      user.following = currentFollowing.filter((id) => id !== targetUserId);
+    } else {
+      user.following = [...currentFollowing, targetUserId!];
+      const notif: RealtimeNotification = {
+        id: `notif-follow-${Date.now()}`,
+        userId: target.id,
+        title: 'Nuevo seguidor en Kromacard',
+        message: `${user.displayName} (${user.handle}) comenzó a seguir tu colección.`,
+        kind: 'community',
+        relatedUserId: user.id,
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      store.notifications.unshift(notif);
+      broadcast('notification:new', notif);
+    }
+    saveStore();
+    broadcast('users:updated', store.users);
+    return res.json({ users: store.users, following: !alreadyFollowing });
+  });
+
+  // Real-time Friends Chat Messages + Notifications
+  app.post('/api/chat', (req, res) => {
+    const body = req.body as {
+      senderId?: string;
+      roomId?: string;
+      recipientId?: string;
+      text?: string;
+      cardId?: string;
+    };
+    const sender = store.users.find((u) => u.id === body.senderId);
+    if (!sender) {
+      return res.status(400).json({ error: 'Remitente no válido.' });
+    }
+
+    const rawText = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!rawText || rawText.length > 500) {
+      return res.status(400).json({ error: 'El mensaje debe tener entre 1 y 500 caracteres.' });
+    }
+
+    const requestedRoom = typeof body.roomId === 'string' ? body.roomId.trim() : 'friends-lounge';
+    let cleanRoomId = 'friends-lounge';
+    let cleanRecipientId: string | undefined;
+
+    if (requestedRoom !== 'friends-lounge') {
+      const recipient = store.users.find((u) => u.id === body.recipientId);
+      if (!recipient || recipient.id === sender.id) {
+        return res.status(400).json({ error: 'Destinatario de chat privado no válido.' });
+      }
+      const pair = [sender.id, recipient.id].sort();
+      cleanRoomId = `dm:${pair[0]}:${pair[1]}`;
+      cleanRecipientId = recipient.id;
+    }
+
+    let cleanCardId: string | undefined;
+    if (typeof body.cardId === 'string' && body.cardId.trim()) {
+      const cardExists = store.cards.some((c) => c.id === body.cardId!.trim());
+      if (cardExists) {
+        cleanCardId = body.cardId.trim();
+      }
+    }
+
+    const newMessage: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      roomId: cleanRoomId,
+      senderId: sender.id,
+      ...(cleanRecipientId ? { recipientId: cleanRecipientId } : {}),
+      text: rawText,
+      ...(cleanCardId ? { cardId: cleanCardId } : {}),
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!Array.isArray(store.chatMessages)) {
+      store.chatMessages = [];
+    }
+    store.chatMessages.push(newMessage);
+    if (store.chatMessages.length > 500) {
+      store.chatMessages = store.chatMessages.slice(-500);
+    }
+
+    // Determine target users to notify
+    const targetUserIds = new Set<string>();
+    if (cleanRecipientId) {
+      targetUserIds.add(cleanRecipientId);
+    } else {
+      for (const fId of sender.friends || []) {
+        if (fId !== sender.id) targetUserIds.add(fId);
+      }
+      for (const u of store.users) {
+        if (
+          u.id !== sender.id &&
+          ((u.following || []).includes(sender.id) || (u.friends || []).includes(sender.id))
+        ) {
+          targetUserIds.add(u.id);
+        }
+      }
+      if (targetUserIds.size === 0) {
+        for (const u of store.users) {
+          if (u.id !== sender.id) targetUserIds.add(u.id);
+        }
+      }
+    }
+
+    const createdNotifications: RealtimeNotification[] = [];
+    const snippet = rawText.length > 90 ? `${rawText.slice(0, 87)}...` : rawText;
+
+    for (const targetId of targetUserIds) {
+      const notif: RealtimeNotification = {
+        id: `notif-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userId: targetId,
+        title: cleanRecipientId
+          ? `Mensaje directo de ${sender.displayName}`
+          : `Sala de Amigos · ${sender.displayName}`,
+        message: snippet,
+        kind: 'chat',
+        relatedRoomId: cleanRoomId,
+        relatedUserId: sender.id,
+        ...(cleanCardId ? { relatedCardId: cleanCardId } : {}),
+        triggerPush: true,
+        read: false,
+        createdAt: newMessage.createdAt,
+      };
+      store.notifications.unshift(notif);
+      createdNotifications.push(notif);
+      broadcast('notification:new', notif);
+      void sendWebPushToUser(targetId, {
+        title: notif.title,
+        body: notif.message,
+        kind: 'chat',
+        roomId: cleanRoomId,
+        url: `/?tab=chat&room=${encodeURIComponent(cleanRoomId)}`,
+        tag: `kromacard-chat-${cleanRoomId}`,
+      });
+    }
+
+    saveStore();
+    broadcast('chat:message', newMessage);
+    return res.status(201).json({ message: newMessage, notifications: createdNotifications });
   });
 
   // Google Auth: verify Firebase ID token or Google OAuth access token and generate/sync CollectorUser
@@ -1440,6 +1907,7 @@ async function startServer() {
           bio: 'Coleccionista en Kromacard conectado con Google.',
           favoriteArtist: 'Mi Artista Favorito',
           friends: [],
+          following: ['user-sofia'],
           googleUid: verifiedUid,
           ...(safePhoto ? { photoUrl: safePhoto } : {}),
         };
@@ -1551,6 +2019,14 @@ async function startServer() {
       broadcast('card:updated', store.cards[giftedIdx]);
       broadcast('trade:created', giftTrade);
       broadcast('notification:new', notif);
+      void sendWebPushToUser(toUserId, {
+        title: notif.title,
+        body: notif.message,
+        kind: 'gift',
+        tradeId: giftTrade.id,
+        url: '/?tab=bazaar',
+        tag: `kromacard-gift-${giftTrade.id}`,
+      });
       return res.status(201).json(giftTrade);
     }
 
@@ -1583,6 +2059,14 @@ async function startServer() {
     saveStore();
     broadcast('trade:created', offer);
     broadcast('notification:new', notif);
+    void sendWebPushToUser(toUserId, {
+      title: notif.title,
+      body: notif.message,
+      kind: 'trade',
+      tradeId: offer.id,
+      url: '/?tab=bazaar',
+      tag: `kromacard-trade-${offer.id}`,
+    });
     return res.status(201).json(offer);
   });
 
@@ -1617,6 +2101,14 @@ async function startServer() {
       saveStore();
       broadcast('trade:updated', trade);
       broadcast('notification:new', notif);
+      void sendWebPushToUser(trade.fromUserId, {
+        title: notif.title,
+        body: notif.message,
+        kind: 'trade',
+        tradeId: trade.id,
+        url: '/?tab=bazaar',
+        tag: `kromacard-trade-${trade.id}`,
+      });
       return res.json(trade);
     }
 
@@ -1662,6 +2154,22 @@ async function startServer() {
     broadcast('trade:updated', trade);
     broadcast('notification:new', notifFrom);
     broadcast('notification:new', notifTo);
+    void sendWebPushToUser(trade.fromUserId, {
+      title: notifFrom.title,
+      body: notifFrom.message,
+      kind: 'trade',
+      tradeId: trade.id,
+      url: '/?tab=bazaar',
+      tag: `kromacard-trade-${trade.id}`,
+    });
+    void sendWebPushToUser(trade.toUserId, {
+      title: notifTo.title,
+      body: notifTo.message,
+      kind: 'trade',
+      tradeId: trade.id,
+      url: '/?tab=bazaar',
+      tag: `kromacard-trade-${trade.id}`,
+    });
     return res.json(trade);
   });
 
@@ -1673,32 +2181,86 @@ async function startServer() {
     return res.json({ ok: true });
   });
 
-  // Register PWA push subscription state per collector
-  app.post('/api/push/subscribe', (req, res) => {
-    const { userId, enabled = true, endpoint } = req.body as {
+  // Dismiss (close) one notification or clear all notifications for a user
+  app.post('/api/notifications/dismiss', (req, res) => {
+    const { userId, notificationId, dismissAll } = req.body as {
       userId?: string;
-      enabled?: boolean;
-      endpoint?: string;
+      notificationId?: string;
+      dismissAll?: boolean;
     };
     if (!userId) {
       return res.status(400).json({ error: 'userId requerido.' });
     }
-    if (!enabled) {
-      pushSubscriptions.delete(userId);
-      return res.json({ ok: true, enabled: false });
+    if (dismissAll) {
+      store.notifications = store.notifications.filter((n) => n.userId !== userId);
+    } else if (notificationId) {
+      store.notifications = store.notifications.filter(
+        (n) => !(n.userId === userId && n.id === notificationId),
+      );
+    } else {
+      return res.status(400).json({ error: 'notificationId o dismissAll requerido.' });
     }
-    pushSubscriptions.set(userId, {
-      endpoint: endpoint || `sw-local://${userId}`,
-      enabled: true,
-      updatedAt: new Date().toISOString(),
-    });
-    return res.json({ ok: true, enabled: true, totalSubscriptions: pushSubscriptions.size });
+    saveStore();
+    return res.json({ ok: true });
   });
 
-  // Trigger a scheduled background trade notification demo over WebSocket -> Service Worker
+  // Expose public VAPID key so browser pushManager can subscribe cleanly
+  app.get('/api/push/vapid-public-key', (_req, res) => {
+    return res.json({
+      vapidPublicKey: vapidConfig.publicKey,
+      configured: Boolean(vapidConfig.publicKey),
+    });
+  });
+
+  // Register PWA Web Push subscription (with real PushSubscription keys) per collector
+  app.post('/api/push/subscribe', (req, res) => {
+    const { userId, enabled = true, endpoint, subscription } = req.body as {
+      userId?: string;
+      enabled?: boolean;
+      endpoint?: string;
+      subscription?: unknown;
+    };
+    if (!userId || !store.users.some((u) => u.id === userId)) {
+      return res.status(400).json({ error: 'userId requerido o no válido.' });
+    }
+    if (!enabled) {
+      pushSubscriptionList = pushSubscriptionList.filter(
+        (item) => !(item.userId === userId && (!endpoint || item.subscription.endpoint === endpoint)),
+      );
+      savePushSubscriptions();
+      return res.json({ ok: true, enabled: false });
+    }
+    if (!isValidWebPushSubscription(subscription)) {
+      return res.status(400).json({ error: 'Suscripción pushManager no válida.' });
+    }
+
+    const updatedAt = new Date().toISOString();
+    const existingIdx = pushSubscriptionList.findIndex(
+      (item) => item.userId === userId && item.subscription.endpoint === subscription.endpoint,
+    );
+    const nextEntry: StoredPushSubscription = {
+      userId,
+      subscription,
+      updatedAt,
+    };
+    if (existingIdx >= 0) {
+      pushSubscriptionList[existingIdx] = nextEntry;
+    } else {
+      pushSubscriptionList.push(nextEntry);
+    }
+    savePushSubscriptions();
+    return res.json({
+      ok: true,
+      enabled: true,
+      hasWebPush: true,
+      totalSubscriptions: pushSubscriptionList.filter((s) => s.userId === userId).length,
+    });
+  });
+
+  // Trigger a scheduled background notification over Web Push + WebSocket -> Service Worker
   app.post('/api/push/test', (req, res) => {
     const { userId, delayMs = 4000 } = req.body as { userId?: string; delayMs?: number };
-    if (!userId) {
+    if (!userId || !store.users.some((u) => u.id === userId)) {
       return res.status(400).json({ error: 'userId requerido.' });
     }
     const clampedDelay = Math.max(0, Math.min(10000, Number(delayMs) || 0));
@@ -1721,15 +2283,52 @@ async function startServer() {
       store.notifications.unshift(notif);
       saveStore();
       broadcast('notification:new', notif);
+      void sendWebPushToUser(userId, {
+        title: notif.title,
+        body: notif.message,
+        kind: 'trade',
+        url: '/?tab=bazaar',
+        tag: notif.id,
+      });
     }, clampedDelay);
 
     return res.json({ ok: true, scheduledInMs: clampedDelay });
   });
 
   if (process.env.NODE_ENV !== 'production') {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      plugins: isHmrDisabled
+        ? [
+            {
+              name: 'disable-vite-hmr-client-ws',
+              enforce: 'post',
+              transform(code: string, id: string) {
+                const cleanId = id.split('?')[0].replace(/\\/g, '/');
+                if (cleanId.endsWith('/vite/dist/client/client.mjs')) {
+                  let patched = code.replace(
+                    /const createWebSocketModuleRunnerTransport\s*=\s*\(options\)\s*=>\s*\{[\s\S]*?\n\};/,
+                    'const createWebSocketModuleRunnerTransport = () => ({ async connect() {}, disconnect() {}, async send() {} });',
+                  );
+                  if (patched === code) {
+                    patched = code.replace(
+                      'transport.connect(createHMRHandler(handleMessage));',
+                      '/* HMR disabled: skip Vite WebSocket connect */',
+                    );
+                  }
+                  return { code: patched, map: null };
+                }
+                return null;
+              },
+            },
+          ]
+        : [],
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        ...(isHmrDisabled ? { hmr: false, ws: false } : { ws: { server } }),
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

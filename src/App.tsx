@@ -11,6 +11,7 @@ import {
   Layers,
   Library,
   Loader2,
+  MessageCircle,
   Mic,
   MicOff,
   Paintbrush,
@@ -32,6 +33,7 @@ import {
 import type {
   Album,
   BootstrapPayload,
+  ChatMessage,
   CollectorUser,
   ConcertBanner,
   CustomBackdrop,
@@ -46,8 +48,10 @@ import type {
   VisibilityMode,
 } from './types/kromacard';
 import { Card3D } from './components/Card3D';
+import { CollectorProfileModal } from './components/CollectorProfileModal';
 import { CommunityLibraryView } from './components/CommunityLibraryView';
 import { ConcertsView } from './components/ConcertsView';
+import { FriendsChatView, getDmRoomId } from './components/FriendsChatView';
 import { FriendsProfileView } from './components/FriendsProfileView';
 import { Inspector3DModal } from './components/Inspector3DModal';
 import { OfflineIndicator, PWAInstallButton } from './components/PWAControls';
@@ -67,9 +71,12 @@ import {
 } from './utils/offlineDb';
 import {
   dispatchServiceWorkerTradeNotification,
+  fetchVapidPublicKey,
   getPushPermissionState,
   type PushPermissionState,
+  registerPushServiceWorker,
   requestTradePushPermission,
+  subscribeUserToPush,
 } from './utils/pushNotifications';
 import {
   countOriginalVaultExports,
@@ -90,7 +97,15 @@ import {
 } from './utils/googleDriveAuth';
 import { soundEngine } from './utils/soundEngine';
 
-type AppTab = 'vault' | 'studio' | 'library' | 'sticker-studio' | 'concerts' | 'bazaar' | 'profile';
+type AppTab =
+  | 'vault'
+  | 'studio'
+  | 'library'
+  | 'sticker-studio'
+  | 'concerts'
+  | 'bazaar'
+  | 'chat'
+  | 'profile';
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -138,7 +153,26 @@ export default function App() {
   const [hasGoogleSession, setHasGoogleSession] = useState<boolean>(() =>
     Boolean(getCurrentGoogleUser() || getDriveAccessToken())
   );
-  const [activeTab, setActiveTab] = useState<AppTab>('vault');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    try {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (
+        tabParam === 'vault' ||
+        tabParam === 'studio' ||
+        tabParam === 'library' ||
+        tabParam === 'sticker-studio' ||
+        tabParam === 'concerts' ||
+        tabParam === 'bazaar' ||
+        tabParam === 'chat' ||
+        tabParam === 'profile'
+      ) {
+        return tabParam;
+      }
+    } catch {
+      // ignore URL parsing errors
+    }
+    return 'vault';
+  });
 
   // Filtering in Vault
   const [vaultScope, setVaultScope] = useState<'all' | 'mine' | 'friends' | 'favorites'>('all');
@@ -150,6 +184,14 @@ export default function App() {
 
   // Modals & Overlays
   const [inspectedCard, setInspectedCard] = useState<Photocard | null>(null);
+  const [inspectedProfileUserId, setInspectedProfileUserId] = useState<string | null>(null);
+  const [chatInitialRoomId, setChatInitialRoomId] = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('room');
+    } catch {
+      return null;
+    }
+  });
   const [editingCard, setEditingCard] = useState<Photocard | null>(null);
   const [studioInitialTab, setStudioInitialTab] = useState<StudioTab>('photo');
   const [returnToStudioAfterSticker, setReturnToStudioAfterSticker] = useState(false);
@@ -168,6 +210,8 @@ export default function App() {
   const [pushPermission, setPushPermission] = useState<PushPermissionState>(() =>
     getPushPermissionState()
   );
+  const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushTesting, setPushTesting] = useState(false);
   const [showVaultSettings, setShowVaultSettings] = useState(false);
   const [autoDriveBackup, setAutoDriveBackup] = useState<boolean>(() => {
@@ -373,6 +417,7 @@ export default function App() {
             backdrops: [],
             trades: [],
             notifications: [],
+            chatMessages: [],
           });
         }
         setLoading(false);
@@ -401,16 +446,28 @@ export default function App() {
             const incomingNotif = payload as RealtimeNotification;
             if (
               incomingNotif.userId === activeUserIdRef.current &&
-              (incomingNotif.kind === 'trade' || incomingNotif.kind === 'gift')
+              (incomingNotif.kind === 'trade' ||
+                incomingNotif.kind === 'gift' ||
+                incomingNotif.kind === 'chat')
             ) {
+              if (incomingNotif.kind === 'chat') {
+                showToast(`${incomingNotif.title}: ${incomingNotif.message}`);
+              }
               const isBackgrounded =
                 document.visibilityState !== 'visible' || !document.hasFocus();
-              if (isBackgrounded || incomingNotif.triggerPush) {
+              if ((isBackgrounded || incomingNotif.triggerPush) && !pushSubscribedRef.current) {
                 void dispatchServiceWorkerTradeNotification({
                   title: incomingNotif.title,
                   body: incomingNotif.message,
+                  kind: incomingNotif.kind === 'chat' ? 'chat' : incomingNotif.kind === 'gift' ? 'gift' : 'trade',
                   tradeId: incomingNotif.relatedTradeId || '',
-                  tag: incomingNotif.id,
+                  roomId: incomingNotif.relatedRoomId || '',
+                  tag:
+                    incomingNotif.kind === 'chat'
+                      ? `kromacard-chat-${incomingNotif.relatedRoomId || 'dm'}`
+                      : incomingNotif.relatedTradeId
+                      ? `kromacard-trade-${incomingNotif.relatedTradeId}`
+                      : incomingNotif.id,
                 });
               }
             }
@@ -539,6 +596,12 @@ export default function App() {
                 if (prev.notifications.some((x) => x.id === n.id)) return prev;
                 return { ...prev, notifications: [n, ...prev.notifications] };
               }
+              case 'chat:message': {
+                const msg = payload as ChatMessage;
+                const existing = prev.chatMessages || [];
+                if (existing.some((m) => m.id === msg.id)) return prev;
+                return { ...prev, chatMessages: [...existing, msg] };
+              }
               default:
                 return prev;
             }
@@ -563,6 +626,52 @@ export default function App() {
     };
   }, []);
 
+  // Register Service Worker, fetch vapidPublicKey, and sync pushManager subscription
+  const pushSubscribedRef = useRef(pushSubscribed);
+  useEffect(() => {
+    pushSubscribedRef.current = pushSubscribed;
+  }, [pushSubscribed]);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      await registerPushServiceWorker();
+      const key = await fetchVapidPublicKey();
+      if (active && key) {
+        setVapidPublicKey(key);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNotifDrawer(false);
+        setToastMsg(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!activeUserId || pushPermission !== 'granted' || !vapidPublicKey) {
+      return;
+    }
+    let active = true;
+    void subscribeUserToPush(activeUserId, vapidPublicKey).then((res) => {
+      if (active && res.hasPushSubscription) {
+        setPushSubscribed(true);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeUserId, pushPermission, vapidPublicKey]);
+
   // Listen for Service Worker notification click deep-links and permission updates
   useEffect(() => {
     const syncPermission = () => setPushPermission(getPushPermissionState());
@@ -575,8 +684,23 @@ export default function App() {
     }
 
     const handleSwMessage = (event: MessageEvent) => {
-      const msg = event.data as { type?: string; tradeId?: string } | undefined;
-      if (msg?.type === 'NAVIGATE_TRADE') {
+      const msg = event.data as
+        | { type?: string; kind?: string; tradeId?: string; roomId?: string }
+        | undefined;
+      if (msg?.type === 'NAVIGATE_NOTIFICATION') {
+        setShowNotifDrawer(false);
+        setInspectedCard(null);
+        if (msg.kind === 'chat') {
+          if (msg.roomId) {
+            setChatInitialRoomId(msg.roomId);
+          }
+          setActiveTab('chat');
+          showToast('Abriendo chat desde la notificación.');
+        } else {
+          setActiveTab('bazaar');
+          showToast('Abriendo Bazar de Trueque desde la notificación.');
+        }
+      } else if (msg?.type === 'NAVIGATE_TRADE') {
         setShowNotifDrawer(false);
         setInspectedCard(null);
         setActiveTab('bazaar');
@@ -1169,6 +1293,61 @@ export default function App() {
     }
   };
 
+  const handleToggleFollow = async (targetUserId: string) => {
+    if (!currentUser) return;
+    const res = await fetch('/api/follow/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser.id, targetUserId }),
+    });
+    if (res.ok) {
+      const { users, following } = (await res.json()) as {
+        users: CollectorUser[];
+        following: boolean;
+      };
+      setData((prev) => (prev ? { ...prev, users } : prev));
+      showToast(following ? 'Ahora sigues a este coleccionista.' : 'Dejaste de seguir este perfil.');
+    }
+  };
+
+  const handleSendChatMessage = async (payload: {
+    roomId: string;
+    recipientId?: string;
+    text: string;
+    cardId?: string;
+  }) => {
+    if (!currentUser) return;
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: currentUser.id,
+        ...payload,
+      }),
+    });
+    if (res.ok) {
+      const { message } = (await res.json()) as {
+        message: ChatMessage;
+        notifications: RealtimeNotification[];
+      };
+      setData((prev) => {
+        if (!prev) return prev;
+        const currentMsgs = prev.chatMessages || [];
+        if (currentMsgs.some((m) => m.id === message.id)) return prev;
+        return { ...prev, chatMessages: [...currentMsgs, message] };
+      });
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'No se pudo enviar el mensaje.');
+    }
+  };
+
+  const handleOpenChatWithUser = (userId: string) => {
+    if (!currentUser) return;
+    setChatInitialRoomId(getDmRoomId(currentUser.id, userId));
+    setActiveTab('chat');
+  };
+
   const handleUpdateProfile = async (patch: Partial<CollectorUser>) => {
     if (!currentUser) return;
     const res = await fetch(`/api/users/${currentUser.id}`, {
@@ -1208,12 +1387,44 @@ export default function App() {
     );
   };
 
+  const handleDismissNotification = async (notificationId?: string) => {
+    if (!currentUser) return;
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            notifications: prev.notifications.filter((n) => {
+              if (n.userId !== currentUser.id) return true;
+              return notificationId ? n.id !== notificationId : false;
+            }),
+          }
+        : prev
+    );
+    try {
+      await fetch('/api/notifications/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          ...(notificationId ? { notificationId } : { dismissAll: true }),
+        }),
+      });
+    } catch {
+      // optimistic UI already closed the notification
+    }
+  };
+
   const handleEnableTradePush = async () => {
     if (!currentUser) return;
-    const result = await requestTradePushPermission(currentUser.id);
+    const result = await requestTradePushPermission(currentUser.id, vapidPublicKey);
     setPushPermission(result.permission);
+    setPushSubscribed(result.subscribed);
     if (result.permission === 'granted') {
-      showToast('Alertas push activadas para ofertas de trueque en segundo plano.');
+      showToast(
+        result.subscribed
+          ? 'Push activado con pushManager: recibirás trueques y mensajes incluso con el navegador cerrado.'
+          : 'Permiso de notificaciones concedido para alertas en el Service Worker.'
+      );
     } else if (result.permission === 'denied') {
       showToast('Notificaciones bloqueadas. Habilítalas en los ajustes del navegador.');
     } else if (result.permission === 'unsupported') {
@@ -1283,7 +1494,7 @@ export default function App() {
           </button>
 
           {/* Zone 2: Single-line navigation links */}
-          <nav className="hidden md:flex items-center gap-3 lg:gap-4 text-xs lg:text-sm font-medium">
+          <nav className="hidden md:flex items-center gap-2.5 lg:gap-3.5 text-xs lg:text-sm font-medium">
             {(
               [
                 { id: 'vault', label: 'Colección' },
@@ -1292,6 +1503,7 @@ export default function App() {
                 { id: 'sticker-studio', label: 'Stickers' },
                 { id: 'concerts', label: 'Conciertos' },
                 { id: 'bazaar', label: 'Trueque' },
+                { id: 'chat', label: 'Sala Chat' },
                 { id: 'profile', label: 'Amigos' },
               ] as { id: AppTab; label: string }[]
             ).map((item) => (
@@ -1318,6 +1530,10 @@ export default function App() {
                 {item.id === 'sticker-studio' && newStickerIds.length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 )}
+                {item.id === 'chat' &&
+                  myNotifications.some((n) => !n.read && n.kind === 'chat') && (
+                    <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
+                  )}
               </button>
             ))}
           </nav>
@@ -2204,6 +2420,28 @@ export default function App() {
             </motion.div>
           )}
 
+          {activeTab === 'chat' && (
+            <motion.div
+              key="chat"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <FriendsChatView
+                currentUser={currentUser}
+                users={data.users}
+                cards={data.cards.filter((c) => canViewItem(c.ownerId, c.visibility))}
+                messages={data.chatMessages || []}
+                initialRoomId={chatInitialRoomId}
+                onClearInitialRoom={() => setChatInitialRoomId(null)}
+                onSendMessage={handleSendChatMessage}
+                onInspectProfile={(uid) => setInspectedProfileUserId(uid)}
+                onInspectCard={(card) => setInspectedCard(card)}
+              />
+            </motion.div>
+          )}
+
           {activeTab === 'profile' && (
             <motion.div
               key="profile"
@@ -2227,6 +2465,9 @@ export default function App() {
                   showToast('Sesión de coleccionista cambiada.');
                 }}
                 onToggleFriend={handleToggleFriend}
+                onToggleFollow={handleToggleFollow}
+                onInspectProfile={(uid) => setInspectedProfileUserId(uid)}
+                onOpenChatWithUser={handleOpenChatWithUser}
                 onUpdateProfile={handleUpdateProfile}
                 onUpdateCardVisibility={(cardId, vis) =>
                   handleUpdateCardPatch(cardId, { visibility: vis })
@@ -2238,14 +2479,15 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Tab Bar (Thumb-Zone Navigation) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0D14]/92 backdrop-blur-md border-t border-white/10 grid grid-cols-6 items-center">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0D14]/92 backdrop-blur-md border-t border-white/10 grid grid-cols-7 items-center">
         {(
           [
-            { id: 'vault', label: 'Colección', icon: <Layers className="w-4 h-4" /> },
+            { id: 'vault', label: 'Bóveda', icon: <Layers className="w-4 h-4" /> },
             { id: 'studio', label: 'Crear', icon: <Plus className="w-4 h-4" /> },
-            { id: 'library', label: 'Biblioteca', icon: <Library className="w-4 h-4" /> },
+            { id: 'library', label: 'Biblio', icon: <Library className="w-4 h-4" /> },
             { id: 'concerts', label: 'Eventos', icon: <FolderHeart className="w-4 h-4" /> },
             { id: 'bazaar', label: 'Trueque', icon: <Repeat className="w-4 h-4" /> },
+            { id: 'chat', label: 'Chat', icon: <MessageCircle className="w-4 h-4" /> },
             { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
           ] as { id: AppTab; label: string; icon: React.ReactNode }[]
         ).map((item) => {
@@ -2329,19 +2571,36 @@ export default function App() {
 
       {/* Real-Time Notifications Drawer */}
       {showNotifDrawer && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end">
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNotifDrawer(false);
+          }}
+        >
           <div className="w-full max-w-md bg-[#131622] border-l border-white/10 h-full p-6 flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <h3 className="font-display text-lg font-bold text-white">
+            <div className="flex items-center justify-between gap-2 pb-4 border-b border-white/10">
+              <h3 className="font-display text-lg font-bold text-white truncate">
                 Notificaciones en Tiempo Real
               </h3>
-              <button
-                type="button"
-                onClick={() => setShowNotifDrawer(false)}
-                className="min-h-[40px] min-w-[40px] rounded-xl bg-white/5 flex items-center justify-center text-slate-300"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {myNotifications.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDismissNotification()}
+                    className="min-h-[36px] px-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-semibold text-slate-300 hover:text-white transition-colors"
+                  >
+                    Cerrar todas
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowNotifDrawer(false)}
+                  aria-label="Cerrar panel de notificaciones"
+                  className="min-h-[40px] min-w-[40px] rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto py-4 space-y-3">
               {/* Service Worker Native Push Notification Controls */}
@@ -2358,12 +2617,14 @@ export default function App() {
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
                       {pushPermission === 'granted'
-                        ? 'Activas vía Service Worker. Recibirás alertas nativas de nuevas ofertas aunque la app esté minimizada.'
+                        ? pushSubscribed
+                          ? 'Suscripción Web Push VAPID activa. Recibirás alertas de nuevos trueques y mensajes directos incluso con el navegador cerrado.'
+                          : 'Activas vía Service Worker. Recibirás alertas nativas de nuevas ofertas y mensajes.'
                         : pushPermission === 'denied'
                         ? 'Permiso bloqueado en este navegador. Habilítalo desde el icono de información del sitio.'
                         : pushPermission === 'unsupported'
                         ? 'Este navegador o contexto no soporta notificaciones nativas.'
-                        : 'Activa las notificaciones nativas para enterarte de nuevos trueques fuera de la app.'}
+                        : 'Activa Web Push para recibir nuevos trueques y mensajes directos incluso si el navegador está cerrado.'}
                     </p>
                   </div>
                 </div>
@@ -2377,7 +2638,7 @@ export default function App() {
                         className="min-h-[38px] px-3.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors"
                       >
                         <BellRing className="w-3.5 h-3.5" />
-                        <span>Activar Push de Trueques</span>
+                        <span>Activar Push de Trueques y Mensajes</span>
                       </button>
                     ) : (
                       <button
@@ -2406,22 +2667,62 @@ export default function App() {
                 myNotifications.map((n) => (
                   <div
                     key={n.id}
-                    className="p-4 rounded-2xl bg-[#0B0D14] border border-white/10 space-y-1"
+                    className="p-4 rounded-2xl bg-[#0B0D14] border border-white/10 space-y-1.5"
                   >
-                    <div className="text-sm font-bold text-white">{n.title}</div>
-                    <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
-                    {n.kind === 'trade' && (
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-sm font-bold text-white leading-snug">{n.title}</div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setShowNotifDrawer(false);
-                          setActiveTab('bazaar');
-                        }}
-                        className="mt-2 text-xs font-semibold text-sky-400 hover:text-sky-300"
+                        onClick={() => void handleDismissNotification(n.id)}
+                        aria-label={`Cerrar notificación: ${n.title}`}
+                        title="Cerrar notificación"
+                        className="min-w-[30px] min-h-[30px] -mt-1 -mr-1 rounded-lg bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white flex items-center justify-center shrink-0 transition-colors"
                       >
-                        Ir al Bazar de Trueque →
+                        <X className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      {n.kind === 'trade' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifDrawer(false);
+                            setActiveTab('bazaar');
+                          }}
+                          className="text-xs font-semibold text-sky-400 hover:text-sky-300"
+                        >
+                          Ir al Bazar de Trueque →
+                        </button>
+                      )}
+                      {n.kind === 'chat' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifDrawer(false);
+                            if (n.relatedRoomId) {
+                              setChatInitialRoomId(n.relatedRoomId);
+                            }
+                            setActiveTab('chat');
+                          }}
+                          className="text-xs font-semibold text-fuchsia-400 hover:text-fuchsia-300"
+                        >
+                          Responder en Sala de Chat →
+                        </button>
+                      )}
+                      {n.relatedUserId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNotifDrawer(false);
+                            setInspectedProfileUserId(n.relatedUserId!);
+                          }}
+                          className="text-xs font-semibold text-emerald-400 hover:text-emerald-300"
+                        >
+                          Ver Perfil →
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -2430,21 +2731,43 @@ export default function App() {
         </div>
       )}
 
+      {/* Collector Profile Viewer Modal (Friends & Followers) */}
+      {inspectedProfileUserId &&
+        data.users.find((u) => u.id === inspectedProfileUserId) && (
+          <CollectorProfileModal
+            profileUser={data.users.find((u) => u.id === inspectedProfileUserId)!}
+            currentUser={currentUser}
+            users={data.users}
+            cards={data.cards}
+            albums={data.albums}
+            textures={data.textures || []}
+            stickers={data.stickers}
+            banners={data.banners}
+            onClose={() => setInspectedProfileUserId(null)}
+            onSelectProfileUser={(uid) => setInspectedProfileUserId(uid)}
+            onToggleFriend={handleToggleFriend}
+            onToggleFollow={handleToggleFollow}
+            onOpenChatWithUser={handleOpenChatWithUser}
+            onInspectCard={(card) => setInspectedCard(card)}
+          />
+        )}
+
       {/* Top-Positioned Non-blocking Alert Toast */}
       {toastMsg && (
         <div
           role="status"
-          className="fixed top-16 right-4 md:right-8 z-50 max-w-sm rounded-2xl bg-sky-500 text-slate-950 px-4 py-3 text-xs font-bold shadow-2xl flex items-center gap-2.5 border border-sky-300/60"
+          className="fixed top-16 right-4 md:right-8 z-50 max-w-sm rounded-2xl bg-sky-500 text-slate-950 pl-4 pr-2.5 py-2.5 text-xs font-bold shadow-2xl flex items-center gap-2 border border-sky-300/60"
         >
           <Bell className="w-4 h-4 shrink-0" />
-          <span className="flex-1">{toastMsg}</span>
+          <span className="flex-1 leading-snug">{toastMsg}</span>
           <button
             type="button"
             onClick={() => setToastMsg(null)}
             aria-label="Cerrar alerta"
-            className="p-0.5 rounded-lg hover:bg-slate-950/15"
+            title="Cerrar notificación"
+            className="min-w-[32px] min-h-[32px] rounded-xl hover:bg-slate-950/15 flex items-center justify-center shrink-0 transition-colors"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}

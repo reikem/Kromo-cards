@@ -2,7 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Music, QrCode, Volume2 } from 'lucide-react';
 import type { Photocard } from '../types/kromacard';
 import { buildFilterCss, generateCardQRDataUrl } from '../utils/cardExporter';
-import { getCelebrationSpec, getFrameShapeClipPath } from '../utils/frameShapes';
+import {
+  getCelebrationSpec,
+  getFrameLayoutSpec,
+  getFrameShapeClipPath,
+} from '../utils/frameShapes';
 import { getHoloTextureOverlayUrl } from '../utils/holoTextures';
 import { soundEngine } from '../utils/soundEngine';
 import { isSvgDataUrl } from '../utils/svgSignature';
@@ -158,8 +162,11 @@ export const Card3D: React.FC<Card3DProps> = ({
   })();
 
   const shineOpacity = Math.max(0, Math.min(1, card.shineIntensity / 100));
-  const isPolaroid = card.frameStyle === 'polaroid' || card.frameShape === 'polaroid';
-  const shapeClipPath = getFrameShapeClipPath(card.frameShape);
+  const effectiveShape =
+    card.frameShape || (card.frameStyle === 'polaroid' ? 'polaroid' : 'rectangulo');
+  const isPolaroid = card.frameStyle === 'polaroid' || effectiveShape === 'polaroid';
+  const shapeClipPath = getFrameShapeClipPath(effectiveShape);
+  const frameLayout = getFrameLayoutSpec(effectiveShape);
   const celebrationSpec = getCelebrationSpec(card.frameCelebration);
   const effectiveCustomFrameStyle =
     customFrameStyle ||
@@ -168,6 +175,7 @@ export const Card3D: React.FC<Card3DProps> = ({
           background: `linear-gradient(135deg, ${card.primaryColor || celebrationSpec.primaryColor}, ${card.secondaryColor || celebrationSpec.secondaryColor})`,
         }
       : undefined);
+  const isLongTitle = card.title.length > 20;
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!onStickerDrop) return;
@@ -233,12 +241,22 @@ export const Card3D: React.FC<Card3DProps> = ({
         >
           <div
             className={`relative w-full h-full rounded-[17px] overflow-hidden flex flex-col ${
-              isPolaroid ? 'bg-white text-slate-900 p-2.5 pb-3' : 'bg-[#111524] text-slate-100 p-2'
+              isPolaroid ? 'bg-white text-slate-900' : 'bg-[#111524] text-slate-100'
             }`}
-            style={shapeClipPath ? { clipPath: shapeClipPath } : undefined}
+            style={{
+              padding: frameLayout.frontPlatePadding,
+              ...(shapeClipPath ? { clipPath: shapeClipPath } : {}),
+            }}
           >
             {/* Photo Viewport */}
-            <div className="relative flex-1 rounded-[12px] overflow-hidden bg-slate-900">
+            <div
+              className={`relative flex-1 overflow-hidden bg-slate-900 ${
+                frameLayout.photoClipPath ? '' : isPolaroid ? 'rounded-[8px]' : 'rounded-[12px]'
+              }`}
+              style={
+                frameLayout.photoClipPath ? { clipPath: frameLayout.photoClipPath } : undefined
+              }
+            >
               {!imgError ? (
                 <img
                   src={card.photoUrl}
@@ -246,39 +264,54 @@ export const Card3D: React.FC<Card3DProps> = ({
                   referrerPolicy="no-referrer"
                   onError={() => setImgError(true)}
                   className="w-full h-full object-cover"
-                  style={{ filter: buildFilterCss(card.filterSnapshot) }}
+                  style={{
+                    filter: buildFilterCss(card.filterSnapshot),
+                    objectPosition: frameLayout.photoObjectPosition,
+                  }}
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 p-4 text-center">
                   <span className="text-3xl mb-2">{card.countryFlag}</span>
-                  <span className="text-xs font-medium text-slate-300">{card.title}</span>
+                  <span className="text-xs font-medium text-slate-300 line-clamp-2">
+                    {card.title}
+                  </span>
                 </div>
               )}
 
               {/* Legibility Gradient Scrim */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/25 pointer-events-none" />
 
-              {/* Top-left OVR / Edition Badge (FIFA / Photocard style) */}
-              <div className="absolute top-2.5 left-2.5 px-2 py-1.5 rounded-xl bg-[#0B0D14]/75 backdrop-blur-md border border-white/10 flex flex-col items-center leading-none">
+              {/* Top-left OVR / Edition Badge (adapts inset to frame shape) */}
+              <div
+                style={frameLayout.topLeftInset}
+                className={`absolute rounded-xl bg-[#0B0D14]/75 backdrop-blur-md border border-white/10 flex flex-col items-center leading-none ${
+                  frameLayout.narrowShape || compact ? 'px-1.5 py-1' : 'px-2 py-1.5'
+                }`}
+              >
                 <span
-                  className={`font-display font-extrabold ${compact ? 'text-base' : 'text-xl'} tabular-nums`}
+                  className={`font-display font-extrabold tabular-nums ${
+                    compact || frameLayout.narrowShape ? 'text-sm' : 'text-xl'
+                  }`}
                   style={{ color: card.frameStyle === 'gold' ? '#FDE68A' : card.primaryColor }}
                 >
                   {card.ratingOrBadge}
                 </span>
-                <span className="text-[9px] font-bold tracking-wider text-slate-200 mt-0.5">
+                <span className="text-[8px] font-bold tracking-wider text-slate-200 mt-0.5 max-w-[54px] truncate">
                   {card.categoryLabel}
                 </span>
-                <span className="text-xs mt-1">{card.countryFlag}</span>
+                <span className="text-[11px] mt-0.5">{card.countryFlag}</span>
               </div>
 
-              {/* Top-right serial / celebration tag */}
-              <div className="absolute top-2.5 right-2.5 text-right pointer-events-none flex flex-col items-end gap-0.5">
-                <span className="font-mono-num text-[10px] font-semibold text-white/90 drop-shadow">
+              {/* Top-right serial / celebration tag (adapts inset to frame shape) */}
+              <div
+                style={frameLayout.topRightInset}
+                className="absolute text-right pointer-events-none flex flex-col items-end gap-0.5 max-w-[44%]"
+              >
+                <span className="font-mono-num text-[9px] font-semibold text-white/90 drop-shadow truncate max-w-full">
                   {card.serialCode}
                 </span>
                 {celebrationSpec && (
-                  <span className="text-[10px] font-semibold text-amber-200 drop-shadow">
+                  <span className="text-[9px] font-semibold text-amber-200 drop-shadow truncate max-w-full">
                     {celebrationSpec.emblem} {celebrationSpec.label}
                   </span>
                 )}
@@ -326,17 +359,30 @@ export const Card3D: React.FC<Card3DProps> = ({
                 </div>
               ))}
 
-              {/* Title & Subtitle inside photo bottom */}
-              <div className="absolute bottom-2.5 left-2.5 right-2.5 pointer-events-none">
+              {/* Title & Subtitle inside photo bottom (adapts alignment, width & line-clamp to frame) */}
+              <div
+                style={frameLayout.bottomOverlayInset}
+                className={`absolute pointer-events-none ${
+                  frameLayout.centerBottom ? 'text-center' : 'text-left'
+                }`}
+              >
                 <h3
-                  className={`font-display font-bold text-white leading-tight truncate ${
-                    compact ? 'text-sm' : 'text-lg'
+                  className={`font-display font-bold text-white leading-tight line-clamp-2 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)] ${
+                    compact || frameLayout.narrowShape
+                      ? isLongTitle
+                        ? 'text-xs'
+                        : 'text-sm'
+                      : isLongTitle
+                        ? 'text-base'
+                        : 'text-lg'
                   }`}
                 >
                   {card.title}
                 </h3>
                 {card.subtitle && (
-                  <p className="text-[11px] text-slate-200/90 truncate mt-0.5">{card.subtitle}</p>
+                  <p className="text-[10px] text-slate-200/95 truncate mt-0.5 drop-shadow">
+                    {card.subtitle}
+                  </p>
                 )}
               </div>
 
@@ -370,13 +416,22 @@ export const Card3D: React.FC<Card3DProps> = ({
               />
             </div>
 
-            {/* Bottom Metadata Strip (Lugar, Fecha, Edición) */}
-            <div className={`pt-2 px-1 flex items-center justify-between gap-2 ${isPolaroid ? 'text-slate-700' : 'text-slate-300'}`}>
-              <div className="min-w-0">
-                <p className={`font-semibold truncate ${compact ? 'text-[10px]' : 'text-xs'} ${isPolaroid ? 'text-slate-900' : 'text-slate-100'}`}>
+            {/* Bottom Metadata Strip (Lugar, Fecha, Edición - adapts width & alignment to frame) */}
+            <div
+              style={frameLayout.footerPadding}
+              className={`pt-1.5 flex items-center gap-1.5 ${
+                frameLayout.centerBottom ? 'justify-center text-center' : 'justify-between text-left'
+              } ${isPolaroid ? 'text-slate-700' : 'text-slate-300'}`}
+            >
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`font-semibold truncate ${
+                    compact || frameLayout.narrowShape ? 'text-[10px]' : 'text-xs'
+                  } ${isPolaroid ? 'text-slate-900' : 'text-slate-100'}`}
+                >
                   {card.location}
                 </p>
-                <p className="text-[10px] text-slate-400 truncate">
+                <p className="text-[9px] text-slate-400 truncate">
                   {card.eventDate} · {card.editionLabel}
                 </p>
               </div>
@@ -385,7 +440,7 @@ export const Card3D: React.FC<Card3DProps> = ({
                   type="button"
                   onClick={handlePlaySong}
                   title={card.concert.favoriteSong}
-                  className={`shrink-0 min-h-[32px] min-w-[32px] px-2 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-colors ${
+                  className={`shrink-0 min-h-[28px] min-w-[28px] px-1.5 rounded-lg flex items-center gap-1 text-[10px] font-medium transition-colors ${
                     isPlayingAudio
                       ? 'bg-sky-500 text-slate-950'
                       : isPolaroid
@@ -393,8 +448,8 @@ export const Card3D: React.FC<Card3DProps> = ({
                         : 'bg-white/10 text-sky-300 hover:bg-white/20'
                   }`}
                 >
-                  {isPlayingAudio ? <Volume2 className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5" />}
-                  {!compact && <span>Audio</span>}
+                  {isPlayingAudio ? <Volume2 className="w-3 h-3" /> : <Music className="w-3 h-3" />}
+                  {!compact && !frameLayout.narrowShape && <span>Audio</span>}
                 </button>
               )}
             </div>
@@ -412,8 +467,11 @@ export const Card3D: React.FC<Card3DProps> = ({
           }}
         >
           <div
-            className="relative w-full h-full rounded-[17px] bg-[#0F1322] text-slate-100 p-3.5 flex flex-col justify-between overflow-hidden"
-            style={shapeClipPath ? { clipPath: shapeClipPath } : undefined}
+            className="relative w-full h-full rounded-[17px] bg-[#0F1322] text-slate-100 flex flex-col justify-between overflow-hidden"
+            style={{
+              ...frameLayout.backPadding,
+              ...(shapeClipPath ? { clipPath: shapeClipPath } : {}),
+            }}
           >
             {card.backBackdropUrl && (
               <>
@@ -423,6 +481,7 @@ export const Card3D: React.FC<Card3DProps> = ({
                   aria-hidden="true"
                   referrerPolicy="no-referrer"
                   className="absolute inset-0 w-full h-full object-cover opacity-55 pointer-events-none"
+                  style={{ objectPosition: frameLayout.photoObjectPosition }}
                 />
                 <div
                   className="absolute inset-0 bg-gradient-to-b from-[#0B0D14]/75 via-[#0F1322]/70 to-[#0B0D14]/90 pointer-events-none"
@@ -436,26 +495,32 @@ export const Card3D: React.FC<Card3DProps> = ({
               aria-hidden="true"
             />
 
-            <div className="relative z-10">
-              <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono-num border-b border-white/10 pb-1.5">
-                <span>{card.serialCode}</span>
-                <span>{card.eventDate}</span>
+            <div className={`relative z-10 ${frameLayout.backHeaderCentered ? 'text-center px-2' : ''}`}>
+              <div className="flex items-center justify-between gap-2 text-[9px] text-slate-400 font-mono-num border-b border-white/10 pb-1">
+                <span className="truncate">{card.serialCode}</span>
+                <span className="shrink-0">{card.eventDate}</span>
               </div>
-              <h4 className="font-display font-bold text-sm text-white mt-2 truncate">
+              <h4
+                className={`font-display font-bold text-white mt-1.5 line-clamp-1 ${
+                  frameLayout.narrowShape ? 'text-xs' : 'text-sm'
+                }`}
+              >
                 {card.title}
               </h4>
-              <p className="text-[11px] text-slate-400 truncate">{card.location}</p>
+              <p className="text-[10px] text-slate-400 truncate">{card.location}</p>
             </div>
 
             {/* Stats Grid */}
-            <div className="relative z-10 grid grid-cols-3 gap-1.5 my-2 bg-white/[0.04] rounded-xl p-2 border border-white/10">
+            <div className="relative z-10 grid grid-cols-3 gap-1 my-1.5 bg-white/[0.04] rounded-xl p-1.5 border border-white/10">
               {card.stats.slice(0, 6).map((st, idx) => (
-                <div key={idx} className="text-center py-0.5">
-                  <div className="text-[9px] font-semibold tracking-wider text-slate-400 truncate">
+                <div key={idx} className="text-center py-0.5 min-w-0">
+                  <div className="text-[8px] font-semibold tracking-wider text-slate-400 truncate">
                     {st.label}
                   </div>
                   <div
-                    className="font-mono-num text-sm font-bold"
+                    className={`font-mono-num font-bold ${
+                      frameLayout.narrowShape ? 'text-xs' : 'text-sm'
+                    }`}
                     style={{ color: card.frameStyle === 'gold' ? '#FDE68A' : '#38BDF8' }}
                   >
                     {st.value}
@@ -465,29 +530,40 @@ export const Card3D: React.FC<Card3DProps> = ({
             </div>
 
             {/* Exclusive Author Message */}
-            <div className="relative z-10 bg-white/[0.03] rounded-xl p-2.5 border border-white/10">
-              <div className="text-[9px] font-semibold text-slate-400 mb-0.5">
+            <div className="relative z-10 bg-white/[0.03] rounded-xl p-2 border border-white/10">
+              <div className="text-[8px] font-semibold text-slate-400 mb-0.5">
                 Nota del autor
               </div>
-              <p className="text-[11px] leading-snug text-slate-200 line-clamp-3">
+              <p className="text-[10px] leading-snug text-slate-200 line-clamp-2">
                 {card.authorMessage || 'Recuerdo guardado en Kromacard.'}
               </p>
             </div>
 
             {/* Digital Autograph & Scannable QR Code */}
-            <div className="relative z-10 flex items-end justify-between gap-2.5 mt-2">
-              <div className="flex-1 bg-white/[0.04] rounded-xl p-2 border border-white/10 h-[76px] flex flex-col justify-between">
-                <span className="text-[9px] font-semibold text-slate-400">Autógrafo Digital</span>
+            <div
+              style={frameLayout.backFooterPadding}
+              className="relative z-10 flex items-end justify-between gap-2 mt-1.5"
+            >
+              <div
+                className={`flex-1 min-w-0 bg-white/[0.04] rounded-xl p-1.5 border border-white/10 flex flex-col justify-between ${
+                  frameLayout.narrowShape ? 'h-[62px]' : 'h-[72px]'
+                }`}
+              >
+                <span className="text-[8px] font-semibold text-slate-400 truncate">
+                  Autógrafo Digital
+                </span>
                 {card.autographDataUrl ? (
                   <img
                     src={card.autographDataUrl}
                     alt="Autógrafo digital"
-                    className={`h-10 w-full object-contain ${
-                      isSvgDataUrl(card.autographDataUrl) ? '' : 'invert'
-                    }`}
+                    className={`w-full object-contain ${
+                      frameLayout.narrowShape ? 'h-8' : 'h-10'
+                    } ${isSvgDataUrl(card.autographDataUrl) ? '' : 'invert'}`}
                   />
                 ) : (
-                  <span className="text-xs italic text-slate-400 font-display">Edición Firmada</span>
+                  <span className="text-[11px] italic text-slate-400 font-display truncate">
+                    Edición Firmada
+                  </span>
                 )}
               </div>
 
@@ -498,7 +574,9 @@ export const Card3D: React.FC<Card3DProps> = ({
                   onQrClick?.();
                 }}
                 title="Abrir enlace QR de esta carta"
-                className="w-[76px] h-[76px] shrink-0 rounded-xl bg-white p-1.5 flex items-center justify-center shadow-md hover:scale-105 transition-transform"
+                className={`${
+                  frameLayout.narrowShape ? 'w-[62px] h-[62px] p-1' : 'w-[72px] h-[72px] p-1.5'
+                } shrink-0 rounded-xl bg-white flex items-center justify-center shadow-md hover:scale-105 transition-transform`}
               >
                 {qrDataUrl ? (
                   <img src={qrDataUrl} alt={`QR ${card.serialCode}`} className="w-full h-full object-contain" />

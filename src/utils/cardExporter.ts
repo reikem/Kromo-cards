@@ -193,8 +193,19 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Inner dark card plate
-  const isPolaroidStyle = card.frameStyle === 'polaroid' || card.frameShape === 'polaroid';
+  // Inner dark card plate (adapts margins to frame shape)
+  const effectiveShape =
+    card.frameShape || (card.frameStyle === 'polaroid' ? 'polaroid' : 'rectangulo');
+  const isPolaroidStyle = card.frameStyle === 'polaroid' || effectiveShape === 'polaroid';
+  const isNarrowShape =
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'hexagono' ||
+    effectiveShape === 'ticket';
+  const centerBottom =
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'hexagono';
   const pad = isPolaroidStyle ? 54 : 36;
   const innerW = W - pad * 2;
   const innerH = H - pad * 2;
@@ -206,7 +217,11 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   const photoX = pad + 26;
   const photoY = pad + 26;
   const photoW = innerW - 52;
-  const photoH = isPolaroidStyle ? innerH - 310 : innerH - 250;
+  const photoH = isPolaroidStyle
+    ? innerH - 310
+    : effectiveShape === 'corazon' || effectiveShape === 'escudo'
+      ? innerH - 290
+      : innerH - 250;
 
   ctx.save();
   drawRoundedRect(ctx, photoX, photoY, photoW, photoH, 28);
@@ -220,7 +235,11 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     const scale = Math.max(photoW / img.width, photoH / img.height);
     const dw = img.width * scale;
     const dh = img.height * scale;
-    ctx.drawImage(img, photoX + (photoW - dw) / 2, photoY + (photoH - dh) / 2, dw, dh);
+    const yBias =
+      effectiveShape === 'corazon' || effectiveShape === 'escudo' || effectiveShape === 'arco'
+        ? 0.28
+        : 0.35;
+    ctx.drawImage(img, photoX + (photoW - dw) / 2, photoY + (photoH - dh) * yBias, dw, dh);
     ctx.filter = 'none';
   } catch {
     // Fallback gradient if image couldn't load
@@ -284,44 +303,69 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     ctx.restore();
   }
 
-  // Top-left rating / OVR badge inside photo
+  // Top-left rating / OVR badge inside safe shape inset
+  const badgeTopOffset =
+    effectiveShape === 'arco' || effectiveShape === 'corazon' || effectiveShape === 'escudo'
+      ? 145
+      : effectiveShape === 'hexagono' || effectiveShape === 'ticket'
+        ? 110
+        : 24;
+  const badgeSideOffset = isNarrowShape || effectiveShape === 'arco' ? 76 : 24;
+
   ctx.fillStyle = 'rgba(11, 13, 20, 0.72)';
-  drawRoundedRect(ctx, photoX + 24, photoY + 24, 148, 178, 22);
+  drawRoundedRect(ctx, photoX + badgeSideOffset, photoY + badgeTopOffset, 148, 178, 22);
   ctx.fill();
   ctx.fillStyle = card.frameStyle === 'gold' ? '#FDE68A' : '#38BDF8';
   ctx.font = '800 64px Outfit, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(card.ratingOrBadge, photoX + 98, photoY + 98);
+  ctx.fillText(card.ratingOrBadge, photoX + badgeSideOffset + 74, photoY + badgeTopOffset + 74);
   ctx.fillStyle = '#E2E8F0';
   ctx.font = '700 26px Outfit, sans-serif';
-  ctx.fillText(card.categoryLabel.slice(0, 8), photoX + 98, photoY + 136);
+  ctx.fillText(card.categoryLabel.slice(0, 8), photoX + badgeSideOffset + 74, photoY + badgeTopOffset + 112);
   ctx.font = '34px sans-serif';
-  ctx.fillText(card.countryFlag, photoX + 98, photoY + 180);
+  ctx.fillText(card.countryFlag, photoX + badgeSideOffset + 74, photoY + badgeTopOffset + 156);
 
-  // Title inside bottom of photo
-  ctx.textAlign = 'left';
+  // Title inside bottom of photo (adapts alignment & width to frame shape)
+  const titleMarginX = centerBottom ? 155 : effectiveShape === 'ticket' ? 92 : 30;
+  const maxTitleWidth = photoW - titleMarginX * 2;
+  ctx.textAlign = centerBottom ? 'center' : 'left';
+  const titleAnchorX = centerBottom ? photoX + photoW / 2 : photoX + titleMarginX;
+  const titleY = photoY + photoH - (centerBottom ? 82 : 72);
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '800 54px Outfit, sans-serif';
-  ctx.fillText(card.title.slice(0, 26), photoX + 30, photoY + photoH - 72);
+  ctx.font = `800 ${isNarrowShape ? 46 : 54}px Outfit, sans-serif`;
+  ctx.fillText(card.title.slice(0, 26), titleAnchorX, titleY, maxTitleWidth);
   ctx.fillStyle = '#CBD5E1';
-  ctx.font = '500 28px Plus Jakarta Sans, sans-serif';
-  ctx.fillText(card.subtitle.slice(0, 40), photoX + 30, photoY + photoH - 28);
+  ctx.font = '500 26px Plus Jakarta Sans, sans-serif';
+  ctx.fillText(card.subtitle.slice(0, 40), titleAnchorX, titleY + 44, maxTitleWidth);
   ctx.restore();
 
   // Bottom footer bar (Location, Date, Edition)
   const footerY = photoY + photoH + 46;
-  const textDark = card.frameStyle === 'polaroid';
+  const textDark = isPolaroidStyle;
+  const footerAnchorX = centerBottom
+    ? W / 2
+    : effectiveShape === 'ticket'
+      ? photoX + 86
+      : photoX + 10;
+  const maxFooterWidth = centerBottom ? W * 0.56 : photoW - 160;
+  ctx.textAlign = centerBottom ? 'center' : 'left';
   ctx.fillStyle = textDark ? '#0F172A' : '#F8FAFC';
-  ctx.font = '700 30px Outfit, sans-serif';
-  ctx.fillText(card.location.slice(0, 34), photoX + 10, footerY + 16);
+  ctx.font = '700 28px Outfit, sans-serif';
+  ctx.fillText(card.location.slice(0, 34), footerAnchorX, footerY + 14, maxFooterWidth);
 
   ctx.fillStyle = textDark ? '#475569' : '#94A3B8';
-  ctx.font = '500 25px Plus Jakarta Sans, sans-serif';
-  ctx.fillText(`${card.eventDate}  ·  ${card.editionLabel}`, photoX + 10, footerY + 64);
+  ctx.font = '500 24px Plus Jakarta Sans, sans-serif';
+  ctx.fillText(
+    `${card.eventDate}  ·  ${card.editionLabel}`,
+    footerAnchorX,
+    footerY + 58,
+    maxFooterWidth
+  );
 
   ctx.fillStyle = textDark ? '#0284C7' : '#38BDF8';
-  ctx.font = '600 22px JetBrains Mono, monospace';
-  ctx.fillText(card.serialCode, photoX + 10, footerY + 112);
+  ctx.font = '600 21px JetBrains Mono, monospace';
+  ctx.fillText(card.serialCode, footerAnchorX, footerY + 102, maxFooterWidth);
+  ctx.textAlign = 'left';
 
   // Celebration emblem top-right if set
   const celebrationSpec = getCelebrationSpec(card.frameCelebration);
@@ -331,8 +375,8 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     ctx.font = '700 26px Outfit, sans-serif';
     ctx.fillText(
       `${celebrationSpec.emblem} ${celebrationSpec.label}`,
-      photoX + photoW - 24,
-      photoY + 58
+      photoX + photoW - badgeSideOffset,
+      photoY + badgeTopOffset + 34
     );
     ctx.textAlign = 'left';
   }
@@ -347,6 +391,26 @@ export async function renderCardBackDataUrl(card: Photocard): Promise<string> {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
+
+  const effectiveShape =
+    card.frameShape || (card.frameStyle === 'polaroid' ? 'polaroid' : 'rectangulo');
+  const isShapedTop =
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'arco' ||
+    effectiveShape === 'hexagono' ||
+    effectiveShape === 'ticket';
+  const isNarrowBottom =
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'hexagono';
+  const padX = isShapedTop ? 120 : 76;
+  const topOffset =
+    effectiveShape === 'arco' || effectiveShape === 'corazon' || effectiveShape === 'escudo'
+      ? 150
+      : effectiveShape === 'hexagono' || effectiveShape === 'ticket'
+        ? 120
+        : 60;
 
   drawCardShapePath(ctx, W, H, card.frameShape);
   ctx.clip();
@@ -385,100 +449,116 @@ export async function renderCardBackDataUrl(card: Photocard): Promise<string> {
   ctx.stroke();
 
   // Header
+  const contentW = W - padX * 2;
+  ctx.textAlign = isNarrowBottom ? 'center' : 'left';
+  const headerAnchorX = isNarrowBottom ? W / 2 : padX;
   ctx.fillStyle = '#94A3B8';
-  ctx.font = '600 26px JetBrains Mono, monospace';
-  ctx.fillText(`CERTIFICADO KROMACARD  ·  ${card.serialCode}`, 76, 110);
+  ctx.font = '600 24px JetBrains Mono, monospace';
+  ctx.fillText(`CERTIFICADO KROMACARD  ·  ${card.serialCode}`, headerAnchorX, topOffset + 40, contentW);
 
   ctx.fillStyle = '#F8FAFC';
-  ctx.font = '800 50px Outfit, sans-serif';
-  ctx.fillText(card.title.slice(0, 26), 76, 178);
+  ctx.font = '800 46px Outfit, sans-serif';
+  ctx.fillText(card.title.slice(0, 26), headerAnchorX, topOffset + 104, contentW);
 
   ctx.fillStyle = '#CBD5E1';
-  ctx.font = '500 26px Plus Jakarta Sans, sans-serif';
-  ctx.fillText(`${card.location}  ·  ${card.eventDate}`, 76, 226);
+  ctx.font = '500 25px Plus Jakarta Sans, sans-serif';
+  ctx.fillText(`${card.location}  ·  ${card.eventDate}`, headerAnchorX, topOffset + 148, contentW);
+  ctx.textAlign = 'left';
 
   // Stats Grid
+  const statsY = topOffset + 186;
   ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  drawRoundedRect(ctx, 76, 270, W - 152, 310, 28);
+  drawRoundedRect(ctx, padX, statsY, contentW, 280, 28);
   ctx.fill();
 
   const stats = card.stats.slice(0, 6);
+  const colW = (contentW - 60) / 3;
   stats.forEach((st, idx) => {
     const col = idx % 3;
     const row = Math.floor(idx / 3);
-    const sx = 116 + col * 300;
-    const sy = 345 + row * 140;
+    const sx = padX + 30 + col * colW;
+    const sy = statsY + 70 + row * 125;
     ctx.fillStyle = '#94A3B8';
-    ctx.font = '700 24px Outfit, sans-serif';
-    ctx.fillText(st.label.toUpperCase(), sx, sy);
+    ctx.font = '700 22px Outfit, sans-serif';
+    ctx.fillText(st.label.toUpperCase(), sx, sy, colW - 16);
     ctx.fillStyle = card.frameStyle === 'gold' ? '#FDE68A' : '#38BDF8';
-    ctx.font = '800 56px JetBrains Mono, monospace';
-    ctx.fillText(String(st.value), sx, sy + 60);
+    ctx.font = '800 50px JetBrains Mono, monospace';
+    ctx.fillText(String(st.value), sx, sy + 54, colW - 16);
   });
 
   // Author message
+  const msgY = statsY + 310;
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  drawRoundedRect(ctx, 76, 616, W - 152, 260, 28);
+  drawRoundedRect(ctx, padX, msgY, contentW, 220, 28);
   ctx.fill();
 
   ctx.fillStyle = '#94A3B8';
-  ctx.font = '700 22px Outfit, sans-serif';
-  ctx.fillText('NOTA EXCLUSIVA DEL AUTOR', 112, 668);
+  ctx.font = '700 20px Outfit, sans-serif';
+  ctx.fillText('NOTA EXCLUSIVA DEL AUTOR', padX + 32, msgY + 48);
 
   ctx.fillStyle = '#E2E8F0';
-  ctx.font = '500 28px Plus Jakarta Sans, sans-serif';
+  ctx.font = '500 26px Plus Jakarta Sans, sans-serif';
   const words = (card.authorMessage || 'Recuerdo guardado en Kromacard.').split(' ');
   let line = '';
-  let ly = 720;
+  let ly = msgY + 96;
   for (const w of words) {
     const test = line ? `${line} ${w}` : w;
-    if (ctx.measureText(test).width > W - 240) {
-      ctx.fillText(line, 112, ly);
+    if (ctx.measureText(test).width > contentW - 64) {
+      ctx.fillText(line, padX + 32, ly);
       line = w;
-      ly += 40;
-      if (ly > 840) break;
+      ly += 36;
+      if (ly > msgY + 190) break;
     } else {
       line = test;
     }
   }
-  if (line && ly <= 840) ctx.fillText(line, 112, ly);
+  if (line && ly <= msgY + 190) ctx.fillText(line, padX + 32, ly);
 
-  // Autograph box
+  // Autograph box & QR Code (inset safely above tapered bottom shapes)
+  const footerBoxY = Math.min(msgY + 250, H - (isNarrowBottom ? 410 : 380));
+  const qrSize = isNarrowBottom ? 270 : 320;
+  const sigBoxW = contentW - qrSize - 32;
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  drawRoundedRect(ctx, 76, 910, 520, 240, 28);
+  drawRoundedRect(ctx, padX, footerBoxY, sigBoxW, 210, 28);
   ctx.fill();
   ctx.fillStyle = '#94A3B8';
-  ctx.font = '700 22px Outfit, sans-serif';
-  ctx.fillText('AUTÓGRAFO DIGITAL', 112, 960);
+  ctx.font = '700 20px Outfit, sans-serif';
+  ctx.fillText('AUTÓGRAFO DIGITAL', padX + 28, footerBoxY + 44);
 
   if (card.autographDataUrl) {
     try {
       const sig = await loadImage(card.autographDataUrl);
-      ctx.drawImage(sig, 112, 980, 440, 145);
+      ctx.drawImage(sig, padX + 28, footerBoxY + 62, sigBoxW - 56, 128);
     } catch {
       // skip
     }
   } else {
     ctx.fillStyle = '#64748B';
-    ctx.font = 'italic 34px Outfit, sans-serif';
-    ctx.fillText('Edición Firmada', 112, 1075);
+    ctx.font = 'italic 30px Outfit, sans-serif';
+    ctx.fillText('Edición Firmada', padX + 28, footerBoxY + 140);
   }
 
   // Real QR Code
   const qrUrl = await generateCardQRDataUrl(card.id);
   const qrImg = await loadImage(qrUrl);
+  const qrX = padX + sigBoxW + 32;
   ctx.fillStyle = '#FFFFFF';
-  drawRoundedRect(ctx, 640, 910, 364, 364, 28);
+  drawRoundedRect(ctx, qrX, footerBoxY, qrSize, qrSize, 24);
   ctx.fill();
-  ctx.drawImage(qrImg, 664, 934, 316, 316);
+  ctx.drawImage(qrImg, qrX + 20, footerBoxY + 20, qrSize - 40, qrSize - 40);
 
   ctx.fillStyle = '#94A3B8';
-  ctx.font = '600 22px Plus Jakarta Sans, sans-serif';
-  ctx.fillText('Escanea el QR para abrir audio y 3D', 76, 1245);
+  ctx.font = '600 20px Plus Jakarta Sans, sans-serif';
+  ctx.fillText('Escanea el QR para audio y 3D', padX, footerBoxY + 250, sigBoxW);
   if (card.concert?.enabled) {
     ctx.fillStyle = '#38BDF8';
-    ctx.font = '600 24px Outfit, sans-serif';
-    ctx.fillText(`♫ ${card.concert.favoriteSong} · ${card.concert.zone}`, 76, 1345);
+    ctx.font = '600 22px Outfit, sans-serif';
+    ctx.fillText(
+      `♫ ${card.concert.favoriteSong} · ${card.concert.zone}`,
+      padX,
+      footerBoxY + 295,
+      sigBoxW
+    );
   }
 
   return canvas.toDataURL('image/png');
