@@ -1,0 +1,6 @@
+{
+  "name": "Kromacard — Estudio de Photocards 3D y Recuerdos",
+  "description": "Crea photocards y cartas coleccionables 3D holográficas y doradas, organiza álbumes, guarda boletos y carteles de conciertos, genera códigos QR imprimibles e intercambia en tiempo real.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
