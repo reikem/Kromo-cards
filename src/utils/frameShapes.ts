@@ -1,4 +1,5 @@
 import type {
+  CardVisualEffect,
   CelebrationTheme,
   CommunityCategory,
   FrameShape,
@@ -53,6 +54,57 @@ export const FRAME_SHAPE_SPECS: FrameShapeSpec[] = [
     label: 'Polaroid',
     desc: 'Marco blanco instantáneo',
   },
+  {
+    id: 'estrella',
+    label: 'Estrella Idol',
+    desc: 'Corona estelar coleccionista',
+    clipPath:
+      'polygon(50% 0%, 66% 6%, 88% 2%, 94% 16%, 100% 30%, 95% 50%, 100% 72%, 88% 88%, 68% 95%, 50% 100%, 32% 95%, 12% 88%, 0% 72%, 5% 50%, 0% 30%, 6% 16%, 12% 2%, 34% 6%)',
+  },
+  {
+    id: 'octagono',
+    label: 'Octágono Pro',
+    desc: 'Corte biselado edición liga',
+    clipPath: 'polygon(22% 0%, 78% 0%, 100% 16%, 100% 84%, 78% 100%, 22% 100%, 0% 84%, 0% 16%)',
+  },
+  {
+    id: 'nube',
+    label: 'Nube Kawaii',
+    desc: 'Silueta suave fan-edition',
+    clipPath:
+      'polygon(16% 6%, 34% 1%, 50% 4%, 66% 1%, 84% 6%, 96% 16%, 100% 32%, 97% 50%, 100% 68%, 96% 84%, 84% 94%, 66% 99%, 50% 96%, 34% 99%, 16% 94%, 4% 84%, 0% 68%, 3% 50%, 0% 32%, 4% 16%)',
+  },
+  {
+    id: 'pergamino',
+    label: 'Pergamino Gala',
+    desc: 'Borde ceremonial con muescas',
+    clipPath:
+      'polygon(6% 0%, 94% 0%, 94% 6%, 100% 6%, 100% 94%, 94% 94%, 94% 100%, 6% 100%, 6% 94%, 0% 94%, 0% 6%, 6% 6%)',
+  },
+  {
+    id: 'visor',
+    label: 'Visor Cyber',
+    desc: 'Corte diagonal asimétrico',
+    clipPath: 'polygon(0% 0%, 76% 0%, 100% 16%, 100% 100%, 24% 100%, 0% 84%)',
+  },
+];
+
+export interface CardVisualEffectSpec {
+  id: CardVisualEffect;
+  label: string;
+  desc: string;
+}
+
+export const CARD_VISUAL_EFFECTS: CardVisualEffectSpec[] = [
+  { id: 'none', label: 'Natural', desc: 'Solo brillo interactivo' },
+  { id: 'sparkle-dust', label: 'Polvo Estelar', desc: 'Destellos diamante' },
+  { id: 'prism-rays', label: 'Rayos Prisma', desc: 'Haces multicolor' },
+  { id: 'aurora-glow', label: 'Brillo Aurora', desc: 'Halo polar suave' },
+  { id: 'scanlines-crt', label: 'Líneas Retro', desc: 'Trama arcade / TV' },
+  { id: 'vignette-noir', label: 'Viñeta Cine', desc: 'Foco dramático' },
+  { id: 'cyber-glitch', label: 'Glitch Cyber', desc: 'Barrido neón cian/rojo' },
+  { id: 'rainbow-edge', label: 'Borde Arcoíris', desc: 'Aro irisado interior' },
+  { id: 'confetti-shimmer', label: 'Confeti VIP', desc: 'Partículas de fiesta' },
 ];
 
 export interface CelebrationThemeSpec {
@@ -273,6 +325,95 @@ export function getFrameLayoutSpec(shape?: FrameShape): FrameLayoutSpec {
         backHeaderCentered: false,
         backFooterPadding: { paddingLeft: '0px', paddingRight: '0px' },
         previewPadding: '10px 10px 16px 10px',
+        narrowShape: false,
+      };
+    case 'estrella':
+      return {
+        shape: effective,
+        photoClipPath:
+          'polygon(50% 0%, 66% 7%, 88% 2%, 94% 18%, 100% 34%, 95% 58%, 100% 84%, 88% 96%, 68% 100%, 32% 100%, 12% 96%, 0% 84%, 5% 58%, 0% 34%, 6% 18%, 12% 2%, 34% 7%)',
+        photoObjectPosition: '50% 28%',
+        frontPlatePadding: '8px 8px 10px 8px',
+        topLeftInset: { top: '12%', left: '10%' },
+        topRightInset: { top: '12%', right: '10%' },
+        bottomOverlayInset: { bottom: '10%', left: '15%', right: '15%' },
+        footerPadding: { paddingLeft: '16%', paddingRight: '16%', paddingBottom: '4%' },
+        centerBottom: true,
+        backPadding: { padding: '12% 11% 12% 11%' },
+        backHeaderCentered: true,
+        backFooterPadding: { paddingLeft: '9%', paddingRight: '9%' },
+        previewPadding: '15% 12%',
+        narrowShape: true,
+      };
+    case 'octagono':
+      return {
+        shape: effective,
+        photoClipPath:
+          'polygon(22% 0%, 78% 0%, 100% 18%, 100% 92%, 86% 100%, 14% 100%, 0% 92%, 0% 18%)',
+        photoObjectPosition: '50% 30%',
+        frontPlatePadding: '7px',
+        topLeftInset: { top: '12%', left: '12%' },
+        topRightInset: { top: '12%', right: '12%' },
+        bottomOverlayInset: { bottom: '8%', left: '14%', right: '14%' },
+        footerPadding: { paddingLeft: '16%', paddingRight: '16%', paddingBottom: '2%' },
+        centerBottom: true,
+        backPadding: { padding: '11% 10% 11% 10%' },
+        backHeaderCentered: true,
+        backFooterPadding: { paddingLeft: '10%', paddingRight: '10%' },
+        previewPadding: '14% 12%',
+        narrowShape: true,
+      };
+    case 'nube':
+      return {
+        shape: effective,
+        photoClipPath:
+          'polygon(16% 6%, 34% 1%, 50% 4%, 66% 1%, 84% 6%, 96% 18%, 100% 36%, 97% 58%, 100% 80%, 94% 96%, 80% 100%, 20% 100%, 6% 96%, 0% 80%, 3% 58%, 0% 36%, 4% 18%)',
+        photoObjectPosition: '50% 30%',
+        frontPlatePadding: '8px',
+        topLeftInset: { top: '11%', left: '9%' },
+        topRightInset: { top: '11%', right: '9%' },
+        bottomOverlayInset: { bottom: '9%', left: '13%', right: '13%' },
+        footerPadding: { paddingLeft: '14%', paddingRight: '14%', paddingBottom: '3%' },
+        centerBottom: true,
+        backPadding: { padding: '11% 10% 11% 10%' },
+        backHeaderCentered: true,
+        backFooterPadding: { paddingLeft: '8%', paddingRight: '8%' },
+        previewPadding: '14% 12%',
+        narrowShape: true,
+      };
+    case 'pergamino':
+      return {
+        shape: effective,
+        photoClipPath:
+          'polygon(6% 0%, 94% 0%, 94% 7%, 100% 7%, 100% 93%, 94% 93%, 94% 100%, 6% 100%, 6% 93%, 0% 93%, 0% 7%, 6% 7%)',
+        photoObjectPosition: '50% 32%',
+        frontPlatePadding: '8px',
+        topLeftInset: { top: '9%', left: '9%' },
+        topRightInset: { top: '9%', right: '9%' },
+        bottomOverlayInset: { bottom: '10px', left: '9%', right: '9%' },
+        footerPadding: { paddingLeft: '9%', paddingRight: '9%', paddingBottom: '2px' },
+        centerBottom: false,
+        backPadding: { padding: '10% 10% 10% 10%' },
+        backHeaderCentered: false,
+        backFooterPadding: { paddingLeft: '4%', paddingRight: '4%' },
+        previewPadding: '12% 12%',
+        narrowShape: false,
+      };
+    case 'visor':
+      return {
+        shape: effective,
+        photoClipPath: 'polygon(0% 0%, 76% 0%, 100% 18%, 100% 100%, 18% 100%, 0% 88%)',
+        photoObjectPosition: '50% 32%',
+        frontPlatePadding: '8px',
+        topLeftInset: { top: '10px', left: '10px' },
+        topRightInset: { top: '12%', right: '8%' },
+        bottomOverlayInset: { bottom: '10px', left: '12%', right: '10px' },
+        footerPadding: { paddingLeft: '16%', paddingRight: '6px', paddingBottom: '2px' },
+        centerBottom: false,
+        backPadding: { padding: '16px 16px 18px 18px' },
+        backHeaderCentered: false,
+        backFooterPadding: { paddingLeft: '10%', paddingRight: '2%' },
+        previewPadding: '12% 12%',
         narrowShape: false,
       };
     case 'rectangulo':

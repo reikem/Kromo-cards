@@ -140,6 +140,18 @@ export const Card3D: React.FC<Card3DProps> = ({
     if (card.frameStyle === 'polaroid') {
       return 'bg-slate-100';
     }
+    if (card.frameStyle === 'neon-cyber') {
+      return 'neon-cyber-gradient holo-foil-animated';
+    }
+    if (card.frameStyle === 'royal-velvet') {
+      return 'royal-velvet-gradient';
+    }
+    if (card.frameStyle === 'sakura-pearl') {
+      return 'sakura-pearl-gradient holo-foil-animated';
+    }
+    if (card.frameStyle === 'liquid-chrome') {
+      return 'liquid-chrome-gradient holo-foil-animated';
+    }
     return '';
   })();
 
@@ -158,6 +170,10 @@ export const Card3D: React.FC<Card3DProps> = ({
     if (card.texture === 'stadium') return 'stadium-beams-pattern mix-blend-screen';
     if (card.texture === 'gold-relief') return 'gold-foil-gradient mix-blend-soft-light';
     if (card.texture === 'carbon') return 'carbon-weave-pattern mix-blend-overlay';
+    if (card.texture === 'aurora-foil') return 'aurora-foil-pattern holo-foil-animated mix-blend-screen';
+    if (card.texture === 'cyber-grid') return 'cyber-grid-pattern mix-blend-screen';
+    if (card.texture === 'velvet-satin') return 'velvet-satin-pattern mix-blend-soft-light';
+    if (card.texture === 'chrome-liquid') return 'chrome-liquid-pattern holo-foil-animated mix-blend-color-dodge';
     return '';
   })();
 
@@ -168,7 +184,16 @@ export const Card3D: React.FC<Card3DProps> = ({
   const shapeClipPath = getFrameShapeClipPath(effectiveShape);
   const frameLayout = getFrameLayoutSpec(effectiveShape);
   const celebrationSpec = getCelebrationSpec(card.frameCelebration);
+  const uploadedBorderStyle =
+    card.customFrameUrl && card.customFrameMode !== 'overlay'
+      ? {
+          backgroundImage: `url(${card.customFrameUrl})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }
+      : undefined;
   const effectiveCustomFrameStyle =
+    uploadedBorderStyle ||
     customFrameStyle ||
     (celebrationSpec
       ? {
@@ -414,7 +439,56 @@ export const Card3D: React.FC<Card3DProps> = ({
                   background: `radial-gradient(circle at ${pointerTilt.gx}% ${pointerTilt.gy}%, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.18) 32%, transparent 70%)`,
                 }}
               />
+
+              {/* Additional Card Visual Effect Overlay */}
+              {card.cardEffect === 'sparkle-dust' && (
+                <div className="absolute inset-0 pointer-events-none effect-sparkle-dust mix-blend-screen opacity-90" />
+              )}
+              {card.cardEffect === 'prism-rays' && (
+                <div className="absolute inset-0 pointer-events-none effect-prism-rays mix-blend-screen opacity-85" />
+              )}
+              {card.cardEffect === 'aurora-glow' && (
+                <div className="absolute inset-0 pointer-events-none aurora-foil-pattern mix-blend-screen opacity-75" />
+              )}
+              {card.cardEffect === 'scanlines-crt' && (
+                <div className="absolute inset-0 pointer-events-none effect-scanlines-crt opacity-70" />
+              )}
+              {card.cardEffect === 'vignette-noir' && (
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background:
+                      'radial-gradient(circle at 50% 45%, transparent 45%, rgba(2,6,23,0.82) 100%)',
+                  }}
+                />
+              )}
+              {card.cardEffect === 'cyber-glitch' && (
+                <div className="absolute inset-0 pointer-events-none effect-cyber-glitch mix-blend-screen opacity-85" />
+              )}
+              {card.cardEffect === 'rainbow-edge' && (
+                <div
+                  className="absolute inset-0 pointer-events-none rounded-[inherit]"
+                  style={{
+                    boxShadow:
+                      'inset 0 0 0 2px rgba(56,189,248,0.6), inset 0 0 18px rgba(232,121,249,0.55)',
+                  }}
+                />
+              )}
+              {card.cardEffect === 'confetti-shimmer' && (
+                <div className="absolute inset-0 pointer-events-none effect-confetti-shimmer mix-blend-screen opacity-90" />
+              )}
             </div>
+
+            {/* Uploaded Transparent PNG Frame Overlay (when customFrameMode === 'overlay') */}
+            {card.customFrameUrl && card.customFrameMode === 'overlay' && (
+              <img
+                src={card.customFrameUrl}
+                alt=""
+                aria-hidden="true"
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 w-full h-full object-fill pointer-events-none z-20"
+              />
+            )}
 
             {/* Bottom Metadata Strip (Lugar, Fecha, Edición - adapts width & alignment to frame) */}
             <div

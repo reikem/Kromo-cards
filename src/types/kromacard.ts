@@ -1,4 +1,13 @@
-export type FrameStyle = 'holo' | 'gold' | 'stadium' | 'custom' | 'polaroid';
+export type FrameStyle =
+  | 'holo'
+  | 'gold'
+  | 'stadium'
+  | 'custom'
+  | 'polaroid'
+  | 'neon-cyber'
+  | 'royal-velvet'
+  | 'sakura-pearl'
+  | 'liquid-chrome';
 
 export type FrameShape =
   | 'rectangulo'
@@ -7,7 +16,23 @@ export type FrameShape =
   | 'corazon'
   | 'hexagono'
   | 'polaroid'
-  | 'arco';
+  | 'arco'
+  | 'estrella'
+  | 'octagono'
+  | 'nube'
+  | 'pergamino'
+  | 'visor';
+
+export type CardVisualEffect =
+  | 'none'
+  | 'sparkle-dust'
+  | 'prism-rays'
+  | 'aurora-glow'
+  | 'scanlines-crt'
+  | 'vignette-noir'
+  | 'cyber-glitch'
+  | 'rainbow-edge'
+  | 'confetti-shimmer';
 
 export type CelebrationTheme =
   | 'ninguna'
@@ -32,6 +57,10 @@ export type TextureEffect =
   | 'stadium'
   | 'gold-relief'
   | 'carbon'
+  | 'aurora-foil'
+  | 'cyber-grid'
+  | 'velvet-satin'
+  | 'chrome-liquid'
   | 'none'
   | 'holo-prism-shards'
   | 'holo-cosmos-galaxy'
@@ -47,7 +76,11 @@ export type TextureEffect =
   | 'holo-winter-aurora'
   | 'holo-christmas-ornaments'
   | 'holo-newyear-champagne'
-  | 'holo-festive-snowlight';
+  | 'holo-festive-snowlight'
+  | 'holo-cyber-circuit'
+  | 'holo-velvet-nebula'
+  | 'holo-liquid-chrome'
+  | 'holo-sakura-foil';
 
 export type VisibilityMode = 'public' | 'friends' | 'private';
 
@@ -108,6 +141,9 @@ export type TexturePatternType =
   | 'malla'
   | 'estelar'
   | 'cuadricula'
+  | 'cristal'
+  | 'galaxia'
+  | 'aurora'
   | 'subida';
 
 export interface CustomTexture {
@@ -133,7 +169,18 @@ export interface CustomFramePreset {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
-  borderPattern: 'solido' | 'metalico' | 'prisma' | 'festivo' | 'neon';
+  borderPattern:
+    | 'solido'
+    | 'metalico'
+    | 'prisma'
+    | 'festivo'
+    | 'neon'
+    | 'cristal'
+    | 'galaxia'
+    | 'arcoiris'
+    | 'cyber';
+  frameImageUrl?: string;
+  frameImageMode?: 'border' | 'overlay';
   category: CommunityCategory;
   authorId: string;
   authorName: string;
@@ -193,7 +240,10 @@ export interface Photocard {
   frameStyle: FrameStyle;
   frameShape?: FrameShape;
   customFrameId?: string;
+  customFrameUrl?: string;
+  customFrameMode?: 'border' | 'overlay';
   frameCelebration?: CelebrationTheme;
+  cardEffect?: CardVisualEffect;
   primaryColor: string;
   secondaryColor: string;
   texture: TextureEffect;

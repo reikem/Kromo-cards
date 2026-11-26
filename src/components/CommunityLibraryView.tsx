@@ -633,17 +633,19 @@ export const CommunityLibraryView: React.FC<CommunityLibraryViewProps> = ({
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className="w-20 h-28 rounded-2xl p-1.5 shrink-0 flex items-center justify-center shadow-lg"
+                      className="w-20 h-28 rounded-2xl p-1.5 shrink-0 flex items-center justify-center shadow-lg overflow-hidden"
                       style={{
-                        background: `linear-gradient(135deg, ${frm.primaryColor}, ${frm.secondaryColor})`,
+                        background: frm.frameImageUrl
+                          ? `url(${frm.frameImageUrl}) center/cover no-repeat`
+                          : `linear-gradient(135deg, ${frm.primaryColor}, ${frm.secondaryColor})`,
                         clipPath: clip,
                       }}
                     >
                       <div
-                        className="w-full h-full bg-[#0B0D14] rounded-xl flex flex-col items-center justify-center"
+                        className="w-full h-full bg-[#0B0D14]/80 rounded-xl flex flex-col items-center justify-center"
                         style={clip ? { clipPath: clip } : undefined}
                       >
-                        <span className="text-2xl">{cel?.emblem || '✨'}</span>
+                        <span className="text-2xl">{frm.frameImageUrl ? '🖼️' : cel?.emblem || '✨'}</span>
                       </div>
                     </div>
                     <div className="min-w-0 space-y-1">

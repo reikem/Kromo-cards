@@ -253,6 +253,58 @@ function createSeedData(): BootstrapPayload {
       sepia: 0,
       grayscale: 100,
     },
+    {
+      id: 'filter-cyber-neon',
+      name: 'Cyber Neón',
+      authorId: 'user-luna',
+      authorName: 'Luna Chen',
+      isPublic: true,
+      brightness: 108,
+      contrast: 130,
+      saturate: 165,
+      hueRotate: 195,
+      sepia: 0,
+      grayscale: 0,
+    },
+    {
+      id: 'filter-aurora-pastel',
+      name: 'Aurora Pastel',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      brightness: 112,
+      contrast: 96,
+      saturate: 122,
+      hueRotate: -18,
+      sepia: 10,
+      grayscale: 0,
+    },
+    {
+      id: 'filter-velvet-nocturno',
+      name: 'Terciopelo Nocturno',
+      authorId: 'user-mateo',
+      authorName: 'Mateo Rivera',
+      isPublic: true,
+      brightness: 92,
+      contrast: 128,
+      saturate: 115,
+      hueRotate: 14,
+      sepia: 12,
+      grayscale: 0,
+    },
+    {
+      id: 'filter-cristal-polar',
+      name: 'Cristal Polar',
+      authorId: 'system',
+      authorName: 'Kromacard',
+      isPublic: true,
+      brightness: 110,
+      contrast: 114,
+      saturate: 108,
+      hueRotate: -24,
+      sepia: 0,
+      grayscale: 0,
+    },
   ];
 
   const stickers: CustomSticker[] = [
@@ -734,7 +786,7 @@ function createSeedData(): BootstrapPayload {
     {
       id: 'tex-seed-navidad-frost',
       name: 'Escarcha Festiva Navidad',
-      imageUrl: '/src/assets/images/holo_christmas_ornaments_1795357305941.jpg',
+      imageUrl: '/src/assets/images/holo_christmas_ornaments_bg_1795356979694.jpg',
       authorId: 'user-luna',
       authorName: 'Luna Chen',
       isPublic: true,
@@ -744,6 +796,62 @@ function createSeedData(): BootstrapPayload {
       category: 'celebraciones',
       likes: 94,
       createdAt: '2024-12-01T14:00:00.000Z',
+    },
+    {
+      id: 'tex-seed-cyber-circuit',
+      name: 'Circuito Láser Cyber',
+      imageUrl: '/src/assets/images/holo_cyber_circuit_1795662667837.jpg',
+      authorId: 'user-luna',
+      authorName: 'Luna Chen',
+      isPublic: true,
+      patternType: 'malla',
+      primaryColor: '#06B6D4',
+      secondaryColor: '#D946EF',
+      category: 'fantasia',
+      likes: 118,
+      createdAt: '2025-02-18T12:00:00.000Z',
+    },
+    {
+      id: 'tex-seed-velvet-nebula',
+      name: 'Nebulosa Terciopelo Oro',
+      imageUrl: '/src/assets/images/holo_velvet_nebula_1795662668748.jpg',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      patternType: 'galaxia',
+      primaryColor: '#7E22CE',
+      secondaryColor: '#F59E0B',
+      category: 'edicion-limitada',
+      likes: 129,
+      createdAt: '2025-02-19T14:00:00.000Z',
+    },
+    {
+      id: 'tex-seed-liquid-chrome',
+      name: 'Cromo Líquido Tornasol',
+      imageUrl: '/src/assets/images/holo_liquid_chrome_1795662670440.jpg',
+      authorId: 'user-mateo',
+      authorName: 'Mateo Rivera',
+      isPublic: true,
+      patternType: 'ondas',
+      primaryColor: '#94A3B8',
+      secondaryColor: '#38BDF8',
+      category: 'deportes',
+      likes: 112,
+      createdAt: '2025-02-20T10:30:00.000Z',
+    },
+    {
+      id: 'tex-seed-sakura-foil',
+      name: 'Sakura Perla y Oro',
+      imageUrl: '/src/assets/images/holo_sakura_foil_1795662670966.jpg',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      patternType: 'aurora',
+      primaryColor: '#F472B6',
+      secondaryColor: '#FDE68A',
+      category: 'celebraciones',
+      likes: 136,
+      createdAt: '2025-02-21T16:15:00.000Z',
     },
   ];
 
@@ -859,6 +967,86 @@ function createSeedData(): BootstrapPayload {
       isPublic: true,
       likes: 105,
       createdAt: '2024-11-18T20:00:00.000Z',
+    },
+    {
+      id: 'frm-estrella-idol',
+      name: 'Estrella Idol Debut',
+      frameShape: 'estrella',
+      celebrationTheme: 'concierto',
+      primaryColor: '#F472B6',
+      secondaryColor: '#A855F7',
+      accentColor: '#FDE68A',
+      borderPattern: 'galaxia',
+      category: 'musica',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      likes: 119,
+      createdAt: '2025-02-15T15:00:00.000Z',
+    },
+    {
+      id: 'frm-octagono-liga',
+      name: 'Octágono Campeón Pro',
+      frameShape: 'octagono',
+      celebrationTheme: 'ninguna',
+      primaryColor: '#0EA5E9',
+      secondaryColor: '#10B981',
+      accentColor: '#E0F2FE',
+      borderPattern: 'cristal',
+      category: 'deportes',
+      authorId: 'user-mateo',
+      authorName: 'Mateo Rivera',
+      isPublic: true,
+      likes: 98,
+      createdAt: '2025-02-16T18:00:00.000Z',
+    },
+    {
+      id: 'frm-nube-kawaii',
+      name: 'Nube Sakura Pastel',
+      frameShape: 'nube',
+      celebrationTheme: 'aniversario',
+      primaryColor: '#FBCFE8',
+      secondaryColor: '#C084FC',
+      accentColor: '#FEF08A',
+      borderPattern: 'arcoiris',
+      category: 'celebraciones',
+      authorId: 'user-sofia',
+      authorName: 'Sofía Martínez',
+      isPublic: true,
+      likes: 114,
+      createdAt: '2025-02-17T11:30:00.000Z',
+    },
+    {
+      id: 'frm-pergamino-real',
+      name: 'Pergamino Edición Real',
+      frameShape: 'pergamino',
+      celebrationTheme: 'ano-nuevo',
+      primaryColor: '#D97706',
+      secondaryColor: '#4C1D95',
+      accentColor: '#FDE68A',
+      borderPattern: 'metalico',
+      category: 'edicion-limitada',
+      authorId: 'system',
+      authorName: 'Kromacard',
+      isPublic: true,
+      likes: 109,
+      createdAt: '2025-02-18T09:00:00.000Z',
+    },
+    {
+      id: 'frm-visor-cyber',
+      name: 'Visor Cyber Holográfico',
+      frameShape: 'visor',
+      celebrationTheme: 'ninguna',
+      primaryColor: '#06B6D4',
+      secondaryColor: '#E879F9',
+      accentColor: '#22D3EE',
+      borderPattern: 'cyber',
+      category: 'fantasia',
+      authorId: 'user-luna',
+      authorName: 'Luna Chen',
+      isPublic: true,
+      likes: 127,
+      createdAt: '2025-02-19T20:10:00.000Z',
     },
   ];
 
@@ -1049,11 +1237,36 @@ function loadStore(): BootstrapPayload {
       const raw = fs.readFileSync(STORE_PATH, 'utf-8');
       const parsed = JSON.parse(raw) as BootstrapPayload;
       if (parsed && Array.isArray(parsed.cards) && Array.isArray(parsed.users)) {
+        if (!Array.isArray(parsed.filters) || parsed.filters.length === 0) {
+          parsed.filters = seed.filters;
+        } else {
+          const existingFilterIds = new Set(parsed.filters.map((f) => f.id));
+          for (const sf of seed.filters) {
+            if (!existingFilterIds.has(sf.id)) parsed.filters.push(sf);
+          }
+        }
         if (!Array.isArray(parsed.textures) || parsed.textures.length === 0) {
           parsed.textures = seed.textures;
+        } else {
+          parsed.textures = parsed.textures.map((t) => ({
+            ...t,
+            imageUrl:
+              t.imageUrl === '/src/assets/images/holo_christmas_ornaments_1795357305941.jpg'
+                ? '/src/assets/images/holo_christmas_ornaments_bg_1795356979694.jpg'
+                : t.imageUrl,
+          }));
+          const existingTextureIds = new Set(parsed.textures.map((t) => t.id));
+          for (const st of seed.textures) {
+            if (!existingTextureIds.has(st.id)) parsed.textures.push(st);
+          }
         }
         if (!Array.isArray(parsed.frames) || parsed.frames.length === 0) {
           parsed.frames = seed.frames;
+        } else {
+          const existingFrameIds = new Set(parsed.frames.map((f) => f.id));
+          for (const sf of seed.frames) {
+            if (!existingFrameIds.has(sf.id)) parsed.frames.push(sf);
+          }
         }
         if (!Array.isArray(parsed.backdrops) || parsed.backdrops.length === 0) {
           parsed.backdrops = seed.backdrops;
@@ -1237,6 +1450,26 @@ async function startServer() {
     res.json(store);
   });
 
+  // Lookup card by ID, serialCode, or ticketCode (for QR Scanner)
+  app.get('/api/cards/lookup', (req, res) => {
+    const code = String(req.query.code || '').trim().toLowerCase();
+    if (!code) {
+      return res.status(400).json({ error: 'Código requerido.' });
+    }
+    const found = store.cards.find(
+      (c) =>
+        (c.visibility === 'public' || c.tradeable) &&
+        (c.id.toLowerCase() === code ||
+          c.serialCode.toLowerCase() === code ||
+          (c.concert?.ticketCode && c.concert.ticketCode.toLowerCase() === code) ||
+          c.serialCode.toLowerCase().includes(code))
+    );
+    if (!found) {
+      return res.status(404).json({ error: 'Photocard no encontrada.' });
+    }
+    return res.json(found);
+  });
+
   // Create card
   app.post('/api/cards', (req, res) => {
     const body = req.body as Partial<Photocard>;
@@ -1251,6 +1484,9 @@ async function startServer() {
     }
     if (body.customTextureUrl && !isSafeImageSource(body.customTextureUrl)) {
       return res.status(400).json({ error: 'La textura personalizada no es válida.' });
+    }
+    if (body.customFrameUrl && !isSafeImageSource(body.customFrameUrl)) {
+      return res.status(400).json({ error: 'La imagen del marco personalizado no es válida.' });
     }
     if (body.backBackdropUrl && !isSafeImageSource(body.backBackdropUrl)) {
       return res.status(400).json({ error: 'El fondo del reverso no es válido.' });
@@ -1278,7 +1514,10 @@ async function startServer() {
       frameStyle: body.frameStyle || 'holo',
       frameShape: body.frameShape || 'rectangulo',
       customFrameId: body.customFrameId,
+      customFrameUrl: body.customFrameUrl,
+      customFrameMode: body.customFrameMode,
       frameCelebration: body.frameCelebration || 'ninguna',
+      cardEffect: body.cardEffect || 'none',
       primaryColor: body.primaryColor || '#38BDF8',
       secondaryColor: body.secondaryColor || '#E879F9',
       texture: body.texture || 'prism',
@@ -1325,6 +1564,9 @@ async function startServer() {
     }
     if (patch.customTextureUrl !== undefined && patch.customTextureUrl !== '' && !isSafeImageSource(patch.customTextureUrl)) {
       return res.status(400).json({ error: 'La textura personalizada no es válida.' });
+    }
+    if (patch.customFrameUrl !== undefined && patch.customFrameUrl !== '' && !isSafeImageSource(patch.customFrameUrl)) {
+      return res.status(400).json({ error: 'La imagen del marco personalizado no es válida.' });
     }
     if (patch.backBackdropUrl !== undefined && patch.backBackdropUrl !== '' && !isSafeImageSource(patch.backBackdropUrl)) {
       return res.status(400).json({ error: 'El fondo del reverso no es válido.' });
@@ -1495,11 +1737,14 @@ async function startServer() {
     return res.status(201).json(newTexture);
   });
 
-  // Custom & Celebration Frames (Create, customize shape & share)
+  // Custom & Celebration Frames (Create, customize shape, upload frame & share)
   app.post('/api/frames', (req, res) => {
     const body = req.body as Partial<CustomFramePreset>;
     if (!body.name || !body.frameShape) {
       return res.status(400).json({ error: 'Nombre y forma de marco requeridos.' });
+    }
+    if (body.frameImageUrl && !isSafeImageSource(body.frameImageUrl)) {
+      return res.status(400).json({ error: 'La imagen del marco personalizado no es válida.' });
     }
     const newFrame: CustomFramePreset = {
       id: `frm-${Date.now()}`,
@@ -1510,6 +1755,8 @@ async function startServer() {
       secondaryColor: body.secondaryColor || '#E879F9',
       accentColor: body.accentColor || '#FDE68A',
       borderPattern: body.borderPattern || 'prisma',
+      frameImageUrl: body.frameImageUrl,
+      frameImageMode: body.frameImageUrl ? body.frameImageMode || 'border' : undefined,
       category: body.category || 'celebraciones',
       authorId: body.authorId || 'user-sofia',
       authorName: body.authorName || 'Coleccionista',

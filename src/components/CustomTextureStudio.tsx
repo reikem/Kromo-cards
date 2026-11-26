@@ -43,6 +43,9 @@ const PATTERN_PRESETS: {
   { id: 'malla', label: 'Malla Láser' },
   { id: 'estelar', label: 'Polvo Estelar' },
   { id: 'cuadricula', label: 'Cuadrícula Holo' },
+  { id: 'cristal', label: 'Facetas Diamante' },
+  { id: 'galaxia', label: 'Espiral Galaxia' },
+  { id: 'aurora', label: 'Cortinas Aurora' },
 ];
 
 export async function exportTextureImageAsPng(
@@ -400,6 +403,59 @@ export const CustomTextureStudio: React.FC<CustomTextureStudioProps> = ({
           ctx.lineWidth = 1;
           ctx.strokeRect(x + 2, y + 2, size - 4, size - 4);
         }
+      }
+    } else if (patternType === 'cristal') {
+      const shards = Math.max(18, Math.round(density * 0.55));
+      for (let i = 0; i < shards; i++) {
+        const px = (((i * 173 + 19) % 977) / 977) * width;
+        const py = (((i * 271 + 43) % 983) / 983) * height;
+        const r = 38 + (i % 5) * 24;
+        ctx.fillStyle = i % 2 === 0 ? `${primaryColor}55` : `${secondaryColor}55`;
+        ctx.beginPath();
+        ctx.moveTo(px, py - r);
+        ctx.lineTo(px + r * 0.65, py);
+        ctx.lineTo(px, py + r);
+        ctx.lineTo(px - r * 0.65, py);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    } else if (patternType === 'galaxia') {
+      const arms = 3;
+      const dots = Math.max(80, Math.round(density * 2.2));
+      for (let i = 0; i < dots; i++) {
+        const arm = i % arms;
+        const progress = i / dots;
+        const theta = progress * Math.PI * 5 + (arm * Math.PI * 2) / arms + rad;
+        const radius = progress * width * 0.65;
+        const gx = cx + Math.cos(theta) * radius;
+        const gy = cy + Math.sin(theta) * radius * 1.25;
+        const dr = 1.8 + (1 - progress) * 3.8;
+        ctx.fillStyle = i % 3 === 0 ? '#FFFFFF' : i % 2 === 0 ? `${primaryColor}CC` : `${secondaryColor}CC`;
+        ctx.beginPath();
+        ctx.arc(gx, gy, dr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (patternType === 'aurora') {
+      const ribbons = Math.max(5, Math.round(density / 12));
+      for (let i = 0; i < ribbons; i++) {
+        const g = ctx.createLinearGradient(0, (i / ribbons) * height, width, ((i + 1) / ribbons) * height);
+        g.addColorStop(0, `${primaryColor}00`);
+        g.addColorStop(0.5, i % 2 === 0 ? `${primaryColor}99` : `${secondaryColor}99`);
+        g.addColorStop(1, `${secondaryColor}00`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        const y0 = (i / ribbons) * height;
+        ctx.moveTo(0, y0);
+        for (let x = 0; x <= width; x += 24) {
+          ctx.lineTo(x, y0 + Math.sin((x / width) * Math.PI * 3 + i + rad) * 55);
+        }
+        ctx.lineTo(width, y0 + 130);
+        ctx.lineTo(0, y0 + 130);
+        ctx.closePath();
+        ctx.fill();
       }
     }
 

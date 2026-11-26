@@ -85,72 +85,144 @@ function drawCardShapePath(
     drawRoundedRect(ctx, 0, 0, W, H, 64);
     return;
   }
-  const pts: [number, number][] =
-    shape === 'escudo'
-      ? [
-          [0.5, 0],
-          [1, 0.1],
-          [1, 0.72],
-          [0.5, 1],
-          [0, 0.72],
-          [0, 0.1],
-        ]
-      : shape === 'ticket'
-        ? [
-            [0.1, 0],
-            [0.9, 0],
-            [1, 0.08],
-            [0.94, 0.16],
-            [1, 0.24],
-            [1, 0.76],
-            [0.94, 0.84],
-            [1, 0.92],
-            [0.9, 1],
-            [0.1, 1],
-            [0, 0.92],
-            [0.06, 0.84],
-            [0, 0.76],
-            [0, 0.24],
-            [0.06, 0.16],
-            [0, 0.08],
-          ]
-        : shape === 'hexagono'
-          ? [
-              [0.14, 0],
-              [0.86, 0],
-              [1, 0.14],
-              [1, 0.86],
-              [0.86, 1],
-              [0.14, 1],
-              [0, 0.86],
-              [0, 0.14],
-            ]
-          : shape === 'arco'
-            ? [
-                [0, 0.18],
-                [0.08, 0.07],
-                [0.24, 0.02],
-                [0.5, 0],
-                [0.76, 0.02],
-                [0.92, 0.07],
-                [1, 0.18],
-                [1, 1],
-                [0, 1],
-              ]
-            : [
-                [0.5, 0.06],
-                [0.72, 0],
-                [0.92, 0.06],
-                [1, 0.22],
-                [1, 0.62],
-                [0.82, 0.88],
-                [0.5, 1],
-                [0.18, 0.88],
-                [0, 0.62],
-                [0, 0.22],
-                [0.08, 0.06],
-                [0.28, 0],
-              ];
+  const shapePoints: Record<string, [number, number][]> = {
+    escudo: [
+      [0.5, 0],
+      [1, 0.1],
+      [1, 0.72],
+      [0.5, 1],
+      [0, 0.72],
+      [0, 0.1],
+    ],
+    ticket: [
+      [0.1, 0],
+      [0.9, 0],
+      [1, 0.08],
+      [0.94, 0.16],
+      [1, 0.24],
+      [1, 0.76],
+      [0.94, 0.84],
+      [1, 0.92],
+      [0.9, 1],
+      [0.1, 1],
+      [0, 0.92],
+      [0.06, 0.84],
+      [0, 0.76],
+      [0, 0.24],
+      [0.06, 0.16],
+      [0, 0.08],
+    ],
+    hexagono: [
+      [0.14, 0],
+      [0.86, 0],
+      [1, 0.14],
+      [1, 0.86],
+      [0.86, 1],
+      [0.14, 1],
+      [0, 0.86],
+      [0, 0.14],
+    ],
+    arco: [
+      [0, 0.18],
+      [0.08, 0.07],
+      [0.24, 0.02],
+      [0.5, 0],
+      [0.76, 0.02],
+      [0.92, 0.07],
+      [1, 0.18],
+      [1, 1],
+      [0, 1],
+    ],
+    corazon: [
+      [0.5, 0.06],
+      [0.72, 0],
+      [0.92, 0.06],
+      [1, 0.22],
+      [1, 0.62],
+      [0.82, 0.88],
+      [0.5, 1],
+      [0.18, 0.88],
+      [0, 0.62],
+      [0, 0.22],
+      [0.08, 0.06],
+      [0.28, 0],
+    ],
+    estrella: [
+      [0.5, 0],
+      [0.66, 0.06],
+      [0.88, 0.02],
+      [0.94, 0.16],
+      [1, 0.3],
+      [0.95, 0.5],
+      [1, 0.72],
+      [0.88, 0.88],
+      [0.68, 0.95],
+      [0.5, 1],
+      [0.32, 0.95],
+      [0.12, 0.88],
+      [0, 0.72],
+      [0.05, 0.5],
+      [0, 0.3],
+      [0.06, 0.16],
+      [0.12, 0.02],
+      [0.34, 0.06],
+    ],
+    octagono: [
+      [0.22, 0],
+      [0.78, 0],
+      [1, 0.16],
+      [1, 0.84],
+      [0.78, 1],
+      [0.22, 1],
+      [0, 0.84],
+      [0, 0.16],
+    ],
+    nube: [
+      [0.16, 0.06],
+      [0.34, 0.01],
+      [0.5, 0.04],
+      [0.66, 0.01],
+      [0.84, 0.06],
+      [0.96, 0.16],
+      [1, 0.32],
+      [0.97, 0.5],
+      [1, 0.68],
+      [0.96, 0.84],
+      [0.84, 0.94],
+      [0.66, 0.99],
+      [0.5, 0.96],
+      [0.34, 0.99],
+      [0.16, 0.94],
+      [0.04, 0.84],
+      [0, 0.68],
+      [0.03, 0.5],
+      [0, 0.32],
+      [0.04, 0.16],
+    ],
+    pergamino: [
+      [0.06, 0],
+      [0.94, 0],
+      [0.94, 0.06],
+      [1, 0.06],
+      [1, 0.94],
+      [0.94, 0.94],
+      [0.94, 1],
+      [0.06, 1],
+      [0.06, 0.94],
+      [0, 0.94],
+      [0, 0.06],
+      [0.06, 0.06],
+    ],
+    visor: [
+      [0, 0],
+      [0.76, 0],
+      [1, 0.16],
+      [1, 1],
+      [0.24, 1],
+      [0, 0.84],
+    ],
+  };
+  const pts = shapePoints[shape] || shapePoints.corazon;
   ctx.beginPath();
   pts.forEach(([px, py], i) => {
     if (i === 0) ctx.moveTo(px * W, py * H);
@@ -183,6 +255,23 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     grad.addColorStop(0.35, '#E879F9');
     grad.addColorStop(0.7, '#FACC15');
     grad.addColorStop(1, '#34D399');
+  } else if (card.frameStyle === 'neon-cyber') {
+    grad.addColorStop(0, '#06B6D4');
+    grad.addColorStop(0.45, '#3B82F6');
+    grad.addColorStop(1, '#D946EF');
+  } else if (card.frameStyle === 'royal-velvet') {
+    grad.addColorStop(0, '#3B0764');
+    grad.addColorStop(0.5, '#F59E0B');
+    grad.addColorStop(1, '#1E1B4B');
+  } else if (card.frameStyle === 'sakura-pearl') {
+    grad.addColorStop(0, '#FBCFE8');
+    grad.addColorStop(0.5, '#FDE68A');
+    grad.addColorStop(1, '#C084FC');
+  } else if (card.frameStyle === 'liquid-chrome') {
+    grad.addColorStop(0, '#1E293B');
+    grad.addColorStop(0.35, '#F8FAFC');
+    grad.addColorStop(0.65, '#38BDF8');
+    grad.addColorStop(1, '#0F172A');
   } else if (card.frameStyle === 'polaroid') {
     grad.addColorStop(0, '#F8FAFC');
     grad.addColorStop(1, '#E2E8F0');
@@ -193,6 +282,18 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
+  if (card.customFrameUrl && card.customFrameMode !== 'overlay') {
+    try {
+      const frmImg = await loadImage(card.customFrameUrl);
+      const fScale = Math.max(W / frmImg.width, H / frmImg.height);
+      const fdw = frmImg.width * fScale;
+      const fdh = frmImg.height * fScale;
+      ctx.drawImage(frmImg, (W - fdw) / 2, (H - fdh) / 2, fdw, fdh);
+    } catch {
+      // keep gradient frame fallback
+    }
+  }
+
   // Inner dark card plate (adapts margins to frame shape)
   const effectiveShape =
     card.frameShape || (card.frameStyle === 'polaroid' ? 'polaroid' : 'rectangulo');
@@ -201,11 +302,17 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     effectiveShape === 'escudo' ||
     effectiveShape === 'corazon' ||
     effectiveShape === 'hexagono' ||
-    effectiveShape === 'ticket';
+    effectiveShape === 'ticket' ||
+    effectiveShape === 'estrella' ||
+    effectiveShape === 'octagono' ||
+    effectiveShape === 'nube';
   const centerBottom =
     effectiveShape === 'escudo' ||
     effectiveShape === 'corazon' ||
-    effectiveShape === 'hexagono';
+    effectiveShape === 'hexagono' ||
+    effectiveShape === 'estrella' ||
+    effectiveShape === 'octagono' ||
+    effectiveShape === 'nube';
   const pad = isPolaroidStyle ? 54 : 36;
   const innerW = W - pad * 2;
   const innerH = H - pad * 2;
@@ -219,7 +326,7 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   const photoW = innerW - 52;
   const photoH = isPolaroidStyle
     ? innerH - 310
-    : effectiveShape === 'corazon' || effectiveShape === 'escudo'
+    : effectiveShape === 'corazon' || effectiveShape === 'escudo' || effectiveShape === 'estrella'
       ? innerH - 290
       : innerH - 250;
 
@@ -236,7 +343,11 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     const dw = img.width * scale;
     const dh = img.height * scale;
     const yBias =
-      effectiveShape === 'corazon' || effectiveShape === 'escudo' || effectiveShape === 'arco'
+      effectiveShape === 'corazon' ||
+      effectiveShape === 'escudo' ||
+      effectiveShape === 'arco' ||
+      effectiveShape === 'estrella' ||
+      effectiveShape === 'nube'
         ? 0.28
         : 0.35;
     ctx.drawImage(img, photoX + (photoW - dw) / 2, photoY + (photoH - dh) * yBias, dw, dh);
@@ -305,12 +416,20 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
 
   // Top-left rating / OVR badge inside safe shape inset
   const badgeTopOffset =
-    effectiveShape === 'arco' || effectiveShape === 'corazon' || effectiveShape === 'escudo'
+    effectiveShape === 'arco' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'estrella' ||
+    effectiveShape === 'octagono'
       ? 145
-      : effectiveShape === 'hexagono' || effectiveShape === 'ticket'
+      : effectiveShape === 'hexagono' ||
+          effectiveShape === 'ticket' ||
+          effectiveShape === 'nube' ||
+          effectiveShape === 'pergamino'
         ? 110
         : 24;
-  const badgeSideOffset = isNarrowShape || effectiveShape === 'arco' ? 76 : 24;
+  const badgeSideOffset =
+    isNarrowShape || effectiveShape === 'arco' || effectiveShape === 'pergamino' ? 90 : 24;
 
   ctx.fillStyle = 'rgba(11, 13, 20, 0.72)';
   drawRoundedRect(ctx, photoX + badgeSideOffset, photoY + badgeTopOffset, 148, 178, 22);
@@ -325,8 +444,66 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   ctx.font = '34px sans-serif';
   ctx.fillText(card.countryFlag, photoX + badgeSideOffset + 74, photoY + badgeTopOffset + 156);
 
+  // Card Visual Effect Overlay in Canvas Export
+  if (card.cardEffect === 'vignette-noir') {
+    const vig = ctx.createRadialGradient(
+      photoX + photoW / 2,
+      photoY + photoH * 0.45,
+      photoW * 0.25,
+      photoX + photoW / 2,
+      photoY + photoH * 0.45,
+      photoH * 0.72
+    );
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(2,6,23,0.78)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(photoX, photoY, photoW, photoH);
+  } else if (card.cardEffect === 'scanlines-crt') {
+    ctx.fillStyle = 'rgba(255,255,255,0.09)';
+    for (let sy = photoY; sy < photoY + photoH; sy += 10) {
+      ctx.fillRect(photoX, sy, photoW, 3);
+    }
+  } else if (card.cardEffect === 'sparkle-dust' || card.cardEffect === 'confetti-shimmer') {
+    const pts = [
+      [0.18, 0.22],
+      [0.76, 0.19],
+      [0.64, 0.48],
+      [0.31, 0.66],
+      [0.84, 0.74],
+      [0.14, 0.82],
+      [0.48, 0.14],
+    ];
+    pts.forEach(([px, py], i) => {
+      ctx.fillStyle =
+        card.cardEffect === 'confetti-shimmer'
+          ? ['#F472B6', '#38BDF8', '#FACC15', '#34D399'][i % 4]
+          : i % 2 === 0
+            ? 'rgba(255,255,255,0.9)'
+            : 'rgba(253,224,71,0.85)';
+      ctx.beginPath();
+      ctx.arc(photoX + photoW * px, photoY + photoH * py, 7, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  } else if (card.cardEffect === 'aurora-glow') {
+    const ag = ctx.createLinearGradient(photoX, photoY, photoX + photoW, photoY + photoH);
+    ag.addColorStop(0, 'rgba(52,211,153,0.28)');
+    ag.addColorStop(0.5, 'rgba(56,189,248,0.22)');
+    ag.addColorStop(1, 'rgba(192,132,252,0.28)');
+    ctx.fillStyle = ag;
+    ctx.fillRect(photoX, photoY, photoW, photoH);
+  } else if (card.cardEffect === 'cyber-glitch') {
+    ctx.fillStyle = 'rgba(34,211,238,0.16)';
+    ctx.fillRect(photoX, photoY + photoH * 0.25, photoW, 24);
+    ctx.fillStyle = 'rgba(244,63,94,0.16)';
+    ctx.fillRect(photoX, photoY + photoH * 0.62, photoW, 18);
+  }
+
   // Title inside bottom of photo (adapts alignment & width to frame shape)
-  const titleMarginX = centerBottom ? 155 : effectiveShape === 'ticket' ? 92 : 30;
+  const titleMarginX = centerBottom
+    ? 160
+    : effectiveShape === 'ticket' || effectiveShape === 'visor'
+      ? 106
+      : 30;
   const maxTitleWidth = photoW - titleMarginX * 2;
   ctx.textAlign = centerBottom ? 'center' : 'left';
   const titleAnchorX = centerBottom ? photoX + photoW / 2 : photoX + titleMarginX;
@@ -344,8 +521,8 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
   const textDark = isPolaroidStyle;
   const footerAnchorX = centerBottom
     ? W / 2
-    : effectiveShape === 'ticket'
-      ? photoX + 86
+    : effectiveShape === 'ticket' || effectiveShape === 'visor'
+      ? photoX + 106
       : photoX + 10;
   const maxFooterWidth = centerBottom ? W * 0.56 : photoW - 160;
   ctx.textAlign = centerBottom ? 'center' : 'left';
@@ -381,6 +558,16 @@ export async function renderCardFrontDataUrl(card: Photocard): Promise<string> {
     ctx.textAlign = 'left';
   }
 
+  // Uploaded Transparent PNG Frame Overlay (if overlay mode)
+  if (card.customFrameUrl && card.customFrameMode === 'overlay') {
+    try {
+      const overlayImg = await loadImage(card.customFrameUrl);
+      ctx.drawImage(overlayImg, 0, 0, W, H);
+    } catch {
+      // ignore overlay load error
+    }
+  }
+
   return canvas.toDataURL('image/png');
 }
 
@@ -395,21 +582,24 @@ export async function renderCardBackDataUrl(card: Photocard): Promise<string> {
   const effectiveShape =
     card.frameShape || (card.frameStyle === 'polaroid' ? 'polaroid' : 'rectangulo');
   const isShapedTop =
-    effectiveShape === 'escudo' ||
-    effectiveShape === 'corazon' ||
-    effectiveShape === 'arco' ||
-    effectiveShape === 'hexagono' ||
-    effectiveShape === 'ticket';
+    effectiveShape !== 'rectangulo' && effectiveShape !== 'polaroid';
   const isNarrowBottom =
     effectiveShape === 'escudo' ||
     effectiveShape === 'corazon' ||
-    effectiveShape === 'hexagono';
-  const padX = isShapedTop ? 120 : 76;
+    effectiveShape === 'hexagono' ||
+    effectiveShape === 'estrella' ||
+    effectiveShape === 'octagono' ||
+    effectiveShape === 'nube';
+  const padX = isShapedTop ? 128 : 76;
   const topOffset =
-    effectiveShape === 'arco' || effectiveShape === 'corazon' || effectiveShape === 'escudo'
+    effectiveShape === 'arco' ||
+    effectiveShape === 'corazon' ||
+    effectiveShape === 'escudo' ||
+    effectiveShape === 'estrella' ||
+    effectiveShape === 'octagono'
       ? 150
-      : effectiveShape === 'hexagono' || effectiveShape === 'ticket'
-        ? 120
+      : isShapedTop
+        ? 122
         : 60;
 
   drawCardShapePath(ctx, W, H, card.frameShape);

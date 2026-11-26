@@ -2172,6 +2172,8 @@ export default function App() {
                     frameStyle: frm.frameShape === 'polaroid' ? 'polaroid' : 'custom',
                     frameShape: frm.frameShape,
                     customFrameId: frm.id,
+                    customFrameUrl: frm.frameImageUrl,
+                    customFrameMode: frm.frameImageMode,
                     frameCelebration: frm.celebrationTheme,
                     primaryColor: frm.primaryColor,
                     secondaryColor: frm.secondaryColor,

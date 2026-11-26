@@ -27,6 +27,7 @@ import {
 import type {
   Album,
   CardStat,
+  CardVisualEffect,
   CelebrationTheme,
   CollectorUser,
   CommunityCategory,
@@ -42,7 +43,7 @@ import type {
   TextureEffect,
   VisibilityMode,
 } from '../types/kromacard';
-import { COMMUNITY_CATEGORIES } from '../utils/frameShapes';
+import { CARD_VISUAL_EFFECTS, COMMUNITY_CATEGORIES } from '../utils/frameShapes';
 import { HOLO_TEXTURE_COLLECTION } from '../utils/holoTextures';
 import {
   detectMusicPlatform,
@@ -102,6 +103,10 @@ const FRAME_OPTIONS: { id: FrameStyle; label: string; desc: string }[] = [
   { id: 'holo', label: 'Holo Prisma', desc: 'Tornasol arcoíris' },
   { id: 'gold', label: 'Dorado Edición', desc: 'Lámina oro 24k' },
   { id: 'stadium', label: 'Estadio Neón', desc: 'Degradado club' },
+  { id: 'neon-cyber', label: 'Cyber Neón', desc: 'Cian y magenta láser' },
+  { id: 'royal-velvet', label: 'Terciopelo Real', desc: 'Púrpura gala y oro' },
+  { id: 'sakura-pearl', label: 'Sakura Perla', desc: 'Nácar rosa dorado' },
+  { id: 'liquid-chrome', label: 'Cromo Líquido', desc: 'Mercurio irisado' },
   { id: 'custom', label: 'Color Libre', desc: 'Elige tus colores' },
   { id: 'polaroid', label: 'Polaroid', desc: 'Borde clásico' },
 ];
@@ -173,8 +178,17 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [frameStyle, setFrameStyle] = useState<FrameStyle>(editingCard?.frameStyle || 'holo');
   const [frameShape, setFrameShape] = useState<FrameShape>(editingCard?.frameShape || 'rectangulo');
   const [customFrameId, setCustomFrameId] = useState<string | undefined>(editingCard?.customFrameId);
+  const [customFrameUrl, setCustomFrameUrl] = useState<string | undefined>(
+    editingCard?.customFrameUrl
+  );
+  const [customFrameMode, setCustomFrameMode] = useState<'border' | 'overlay'>(
+    editingCard?.customFrameMode || 'border'
+  );
   const [frameCelebration, setFrameCelebration] = useState<CelebrationTheme>(
     editingCard?.frameCelebration || 'ninguna'
+  );
+  const [cardEffect, setCardEffect] = useState<CardVisualEffect>(
+    editingCard?.cardEffect || 'none'
   );
   const [primaryColor, setPrimaryColor] = useState(editingCard?.primaryColor || '#38BDF8');
   const [secondaryColor, setSecondaryColor] = useState(editingCard?.secondaryColor || '#E879F9');
@@ -519,7 +533,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
     frameStyle,
     frameShape,
     customFrameId,
+    customFrameUrl,
+    customFrameMode,
     frameCelebration,
+    cardEffect,
     primaryColor,
     secondaryColor,
     texture,
@@ -982,10 +999,21 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 activePrimaryColor={primaryColor}
                 activeSecondaryColor={secondaryColor}
                 activeCustomFrameId={customFrameId}
+                activeCustomFrameUrl={customFrameUrl}
+                activeCustomFrameMode={customFrameMode}
                 onSelectShape={(nextShape) => {
                   setFrameShape(nextShape);
                   if (nextShape === 'polaroid') setFrameStyle('polaroid');
                   else if (frameStyle === 'polaroid') setFrameStyle('custom');
+                }}
+                onApplyUploadedFrame={(imageUrl, nextMode = 'border') => {
+                  setCustomFrameUrl(imageUrl);
+                  setCustomFrameMode(nextMode);
+                  setCustomFrameId(undefined);
+                  if (imageUrl) {
+                    setFrameStyle('custom');
+                    setPreviewSide('front');
+                  }
                 }}
                 onApplyFramePreset={(preset) => {
                   setFrameShape(preset.frameShape);
@@ -993,6 +1021,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   setPrimaryColor(preset.primaryColor);
                   setSecondaryColor(preset.secondaryColor);
                   setCustomFrameId(preset.id);
+                  setCustomFrameUrl(preset.frameImageUrl);
+                  setCustomFrameMode(preset.frameImageMode || 'border');
                   setFrameStyle(preset.frameShape === 'polaroid' ? 'polaroid' : 'custom');
                   setPreviewSide('front');
                 }}
@@ -1070,6 +1100,37 @@ export const StudioView: React.FC<StudioViewProps> = ({
               />
             </div>
 
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-amber-300">
+                  Efectos Visuales y Filtros de Luz sobre la Carta
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {CARD_VISUAL_EFFECTS.find((ef) => ef.id === cardEffect)?.label || 'Natural'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {CARD_VISUAL_EFFECTS.map((ef) => (
+                  <button
+                    key={ef.id}
+                    type="button"
+                    onClick={() => {
+                      setCardEffect(ef.id);
+                      setPreviewSide('front');
+                    }}
+                    className={`min-h-[48px] p-2.5 rounded-xl text-left border transition-colors ${
+                      cardEffect === ef.id
+                        ? 'bg-amber-400/20 border-amber-400 text-white'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="text-xs font-bold truncate">{ef.label}</div>
+                    <div className="text-[10px] text-slate-400 truncate">{ef.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div id="studio-textures-panel" className="space-y-5 scroll-mt-24">
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -1084,13 +1145,17 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {(
                   [
                     { id: 'prism', label: 'Prisma' },
                     { id: 'stadium', label: 'Estadio' },
                     { id: 'gold-relief', label: 'Oro' },
                     { id: 'carbon', label: 'Carbono' },
+                    { id: 'aurora-foil', label: 'Aurora' },
+                    { id: 'cyber-grid', label: 'Rejilla Cyber' },
+                    { id: 'velvet-satin', label: 'Terciopelo' },
+                    { id: 'chrome-liquid', label: 'Cromo Líquido' },
                     { id: 'none', label: 'Mate' },
                   ] as { id: TextureEffect; label: string }[]
                 ).map((t) => (

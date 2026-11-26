@@ -114,6 +114,34 @@ export const HOLO_TEXTURE_COLLECTION: HoloTexturePreset[] = [
     category: 'festivo',
     imageUrl: '/src/assets/images/holo_festive_snowlight_bg_1795356979884.jpg',
   },
+  {
+    id: 'holo-cyber-circuit',
+    label: 'Circuito Cyber',
+    subtitle: 'Trazos láser cian/magenta',
+    category: 'clasico',
+    imageUrl: '/src/assets/images/holo_cyber_circuit_1795662667837.jpg',
+  },
+  {
+    id: 'holo-velvet-nebula',
+    label: 'Nebulosa Velvet',
+    subtitle: 'Terciopelo cósmico oro',
+    category: 'clasico',
+    imageUrl: '/src/assets/images/holo_velvet_nebula_1795662668748.jpg',
+  },
+  {
+    id: 'holo-liquid-chrome',
+    label: 'Cromo Líquido',
+    subtitle: 'Mercurio tornasol 3D',
+    category: 'clasico',
+    imageUrl: '/src/assets/images/holo_liquid_chrome_1795662670440.jpg',
+  },
+  {
+    id: 'holo-sakura-foil',
+    label: 'Sakura Lámina',
+    subtitle: 'Pétalos perla y oro',
+    category: 'festivo',
+    imageUrl: '/src/assets/images/holo_sakura_foil_1795662670966.jpg',
+  },
 ];
 
 export function getHoloTextureOverlayUrl(texture: TextureEffect): string | null {

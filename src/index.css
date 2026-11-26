@@ -104,6 +104,144 @@
   );
 }
 
+.neon-cyber-gradient {
+  background: linear-gradient(
+    135deg,
+    #06B6D4 0%,
+    #3B82F6 32%,
+    #D946EF 66%,
+    #22D3EE 100%
+  );
+}
+
+.royal-velvet-gradient {
+  background: linear-gradient(
+    140deg,
+    #3B0764 0%,
+    #7E22CE 34%,
+    #F59E0B 52%,
+    #581C87 78%,
+    #1E1B4B 100%
+  );
+}
+
+.sakura-pearl-gradient {
+  background: linear-gradient(
+    135deg,
+    #FBCFE8 0%,
+    #F472B6 30%,
+    #FDE68A 58%,
+    #C084FC 82%,
+    #FCE7F3 100%
+  );
+}
+
+.liquid-chrome-gradient {
+  background: linear-gradient(
+    125deg,
+    #1E293B 0%,
+    #94A3B8 22%,
+    #F8FAFC 42%,
+    #38BDF8 56%,
+    #E879F9 72%,
+    #64748B 88%,
+    #0F172A 100%
+  );
+}
+
+.aurora-foil-pattern {
+  background-image:
+    radial-gradient(ellipse at 20% 25%, rgba(52, 211, 153, 0.42), transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(56, 189, 248, 0.45), transparent 55%),
+    radial-gradient(ellipse at 50% 45%, rgba(192, 132, 252, 0.35), transparent 60%);
+}
+
+.cyber-grid-pattern {
+  background-image:
+    linear-gradient(to right, rgba(34, 211, 238, 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 121, 249, 0.22) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.velvet-satin-pattern {
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 2px,
+      transparent 2px,
+      transparent 8px
+    ),
+    radial-gradient(circle at 50% 35%, rgba(251, 191, 36, 0.25), transparent 65%);
+}
+
+.chrome-liquid-pattern {
+  background-image: repeating-radial-gradient(
+    circle at 35% 30%,
+    rgba(255, 255, 255, 0.24) 0px,
+    rgba(56, 189, 248, 0.16) 8px,
+    rgba(232, 121, 249, 0.14) 16px,
+    transparent 24px
+  );
+}
+
+.effect-scanlines-crt {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.08) 0px,
+    rgba(255, 255, 255, 0.08) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+
+.effect-sparkle-dust {
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.9) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 76% 19%, rgba(253, 224, 71, 0.85) 1.5px, transparent 2.8px),
+    radial-gradient(circle at 64% 48%, rgba(56, 189, 248, 0.9) 1.8px, transparent 3px),
+    radial-gradient(circle at 31% 66%, rgba(244, 114, 182, 0.85) 1.5px, transparent 2.8px),
+    radial-gradient(circle at 84% 74%, rgba(255, 255, 255, 0.9) 1.4px, transparent 2.4px),
+    radial-gradient(circle at 14% 82%, rgba(253, 224, 71, 0.8) 1.4px, transparent 2.5px);
+}
+
+.effect-prism-rays {
+  background-image: conic-gradient(
+    from 210deg at 50% 15%,
+    rgba(56, 189, 248, 0.3) 0deg,
+    transparent 25deg,
+    rgba(232, 121, 249, 0.28) 55deg,
+    transparent 90deg,
+    rgba(250, 204, 21, 0.24) 130deg,
+    transparent 175deg,
+    rgba(52, 211, 153, 0.24) 220deg,
+    transparent 290deg,
+    rgba(56, 189, 248, 0.3) 360deg
+  );
+}
+
+.effect-cyber-glitch {
+  background-image:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.16) 0%, transparent 18%, transparent 82%, rgba(244, 63, 94, 0.18) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(34, 211, 238, 0.08) 0px,
+      rgba(34, 211, 238, 0.08) 2px,
+      transparent 2px,
+      transparent 14px
+    );
+}
+
+.effect-confetti-shimmer {
+  background-image:
+    radial-gradient(circle at 22% 16%, rgba(244, 114, 182, 0.85) 2px, transparent 3px),
+    radial-gradient(circle at 48% 12%, rgba(56, 189, 248, 0.85) 2px, transparent 3px),
+    radial-gradient(circle at 82% 28%, rgba(250, 204, 21, 0.9) 2.2px, transparent 3.2px),
+    radial-gradient(circle at 16% 52%, rgba(52, 211, 153, 0.85) 2px, transparent 3px),
+    radial-gradient(circle at 74% 62%, rgba(232, 121, 249, 0.85) 2.2px, transparent 3.2px),
+    radial-gradient(circle at 38% 78%, rgba(250, 204, 21, 0.85) 2px, transparent 3px);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
