@@ -343,7 +343,7 @@ export const CommunityLibraryView: React.FC<CommunityLibraryViewProps> = ({
     <div className="space-y-6">
       {/* Header & Quick Create Actions */}
       <div className="bg-[#131622] border border-white/10 rounded-3xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-        <div className="space-y-1.5 max-w-2xl">
+        <div className="space-y-1.5 min-w-0 flex-1 max-w-2xl">
           <div className="text-xs font-semibold text-sky-400">
             Biblioteca Creativa de la Comunidad · {unifiedItems.length} creaciones disponibles
           </div>
@@ -355,37 +355,37 @@ export const CommunityLibraryView: React.FC<CommunityLibraryViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 lg:max-w-[380px] xl:max-w-[440px] lg:justify-end">
           <button
             type="button"
             onClick={() => onOpenStudioTab('frame')}
-            className="min-h-[40px] px-3.5 rounded-xl bg-gradient-to-r from-sky-400 to-fuchsia-400 text-slate-950 text-xs font-bold flex items-center gap-1.5"
+            className="min-h-[40px] px-3.5 rounded-xl bg-gradient-to-r from-sky-400 to-fuchsia-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Shapes className="w-3.5 h-3.5" />
+            <Shapes className="w-3.5 h-3.5 shrink-0" />
             <span>Crear Marco / Textura</span>
           </button>
           <button
             type="button"
             onClick={() => setShowBackdropForm((v) => !v)}
-            className="min-h-[40px] px-3.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5"
+            className="min-h-[40px] px-3.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Plus className="w-3.5 h-3.5 text-sky-400" />
+            <Plus className="w-3.5 h-3.5 shrink-0 text-sky-400" />
             <span>Subir Fondo</span>
           </button>
           <button
             type="button"
             onClick={onOpenStickerStudio}
-            className="min-h-[40px] px-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-xs font-semibold flex items-center gap-1.5"
+            className="min-h-[40px] px-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Sticker className="w-3.5 h-3.5" />
+            <Sticker className="w-3.5 h-3.5 shrink-0" />
             <span>Crear Sticker</span>
           </button>
           <button
             type="button"
             onClick={onOpenBannerCreator}
-            className="min-h-[40px] px-3.5 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-400/40 text-fuchsia-200 text-xs font-semibold flex items-center gap-1.5"
+            className="min-h-[40px] px-3.5 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-400/40 text-fuchsia-200 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap"
           >
-            <Paintbrush className="w-3.5 h-3.5" />
+            <Paintbrush className="w-3.5 h-3.5 shrink-0" />
             <span>Crear Cartel</span>
           </button>
         </div>

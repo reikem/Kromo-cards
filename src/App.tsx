@@ -1639,7 +1639,7 @@ export default function App() {
             >
               {/* Hero & Workspace Controls */}
               <section className="rounded-3xl bg-[#131622] border border-white/10 p-6 md:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                <div className="max-w-2xl space-y-2.5">
+                <div className="min-w-0 flex-1 max-w-2xl space-y-2.5">
                   <div className="text-xs font-semibold text-sky-400">
                     Colección de {currentUser.displayName} · {visibleCards.length} photocards visibles
                   </div>
@@ -1651,7 +1651,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-2.5 min-w-0 lg:max-w-[420px] xl:max-w-[520px] lg:justify-end">
                   <button
                     type="button"
                     onClick={() => {
@@ -1660,9 +1660,9 @@ export default function App() {
                       setReturnToStudioAfterSticker(false);
                       setActiveTab('studio');
                     }}
-                    className="min-h-[44px] px-5 rounded-xl bg-gradient-to-r from-sky-400 to-fuchsia-400 text-slate-950 text-sm font-bold flex items-center gap-2 hover:opacity-95"
+                    className="min-h-[44px] px-5 rounded-xl bg-gradient-to-r from-sky-400 to-fuchsia-400 text-slate-950 text-sm font-bold flex items-center gap-2 whitespace-nowrap hover:opacity-95"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-4 h-4 shrink-0" />
                     <span>Crear Photocard</span>
                   </button>
 
@@ -1672,9 +1672,9 @@ export default function App() {
                       setReturnToStudioAfterSticker(false);
                       setActiveTab('sticker-studio');
                     }}
-                    className="min-h-[44px] px-4 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-2 transition-colors"
+                    className="min-h-[44px] px-4 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors"
                   >
-                    <Sticker className="w-4 h-4 text-emerald-300" />
+                    <Sticker className="w-4 h-4 shrink-0 text-emerald-300" />
                     <span>Crear Sticker</span>
                   </button>
 
@@ -1684,9 +1684,9 @@ export default function App() {
                       setAutoOpenCanvasBanner(true);
                       setActiveTab('concerts');
                     }}
-                    className="min-h-[44px] px-4 rounded-xl bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-400/40 text-fuchsia-200 text-xs font-bold flex items-center gap-2 transition-colors"
+                    className="min-h-[44px] px-4 rounded-xl bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-400/40 text-fuchsia-200 text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors"
                   >
-                    <Paintbrush className="w-4 h-4 text-fuchsia-300" />
+                    <Paintbrush className="w-4 h-4 shrink-0 text-fuchsia-300" />
                     <span>Crear Cartel / Evento</span>
                   </button>
 
@@ -1696,35 +1696,35 @@ export default function App() {
                       setPrintSheetCard(undefined);
                       setShowPrintModal(true);
                     }}
-                    className="min-h-[44px] px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-2"
+                    className="min-h-[44px] px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-2 whitespace-nowrap"
                   >
-                    <Printer className="w-4 h-4 text-amber-300" />
+                    <Printer className="w-4 h-4 shrink-0 text-amber-300" />
                     <span>Imprimir A4</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={toggleCrowdAmbience}
-                    className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                    className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-colors ${
                       crowdPlaying
                         ? 'bg-sky-500/20 border-sky-400 text-sky-300'
                         : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                     }`}
                   >
-                    {crowdPlaying ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                    {crowdPlaying ? <Volume2 className="w-4 h-4 shrink-0" /> : <VolumeX className="w-4 h-4 shrink-0" />}
                     <span>Ambiente</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowVaultSettings((v) => !v)}
-                    className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                    className={`min-h-[44px] px-3.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap transition-colors ${
                       showVaultSettings || autoDriveBackup
                         ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200 hover:bg-emerald-500/25'
                         : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10'
                     }`}
                   >
-                    <Settings className="w-4 h-4 text-emerald-300" />
+                    <Settings className="w-4 h-4 shrink-0 text-emerald-300" />
                     <span>Config. Bóveda</span>
                   </button>
 

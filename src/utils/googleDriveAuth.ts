@@ -224,7 +224,10 @@ export function formatGoogleAuthError(err: unknown): string {
     code === 'auth/operation-not-allowed' ||
     code === 'auth/permission-denied-on-the-service'
   ) {
-    return 'El servicio de acceso con Google se redirigió al cliente OAuth directo. Intenta de nuevo en un momento.';
+    return 'El proveedor de Google no está habilitado para este proyecto. Intenta de nuevo en unos segundos.';
+  }
+  if (msg.includes('origin_mismatch') || msg.includes('redirect_uri_mismatch')) {
+    return 'El origen de vista previa no coincide con el cliente OAuth directo. Intenta iniciar sesión de nuevo con la ventana de Google.';
   }
   if (msg === 'SCOPE_MISSING') {
     return 'Faltan permisos de Google Drive. Pulsa "Reconectar y permitir Google Drive" y marca la casilla de Drive.';
@@ -290,25 +293,13 @@ export function initGoogleDriveAuth(
   });
 }
 
-// Clean Google Sign-In to generate/authenticate the Kromacard collector account
+// Clean Google Sign-In via Firebase Auth popup (uses firebaseapp.com authDomain, avoiding origin_mismatch on preview URLs)
 export async function signInWithGoogleAccount(): Promise<{
   firebaseUser: User | null;
   synced: { user: CollectorUser; isNewUser: boolean; album?: Album } | null;
 }> {
   isSigningIn = true;
   try {
-    if (GOOGLE_OAUTH_CLIENT_ID) {
-      const token = await requestDriveTokenViaGis(
-        undefined,
-        false,
-        GOOGLE_PROFILE_AND_DRIVE_SCOPES
-      );
-      cachedAccessToken = token;
-      const synced = await syncBackendCollectorFromGoogle(null, token);
-      notifyAuthListeners();
-      return { firebaseUser: auth.currentUser, synced };
-    }
-
     const result = await signInWithPopup(auth, buildGoogleProvider(false, false));
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
@@ -334,7 +325,7 @@ export async function signInWithGoogleAccount(): Promise<{
         GOOGLE_PROFILE_AND_DRIVE_SCOPES
       );
       cachedAccessToken = token;
-      const synced = await syncBackendCollectorFromGoogle(null, token);
+      const synced = await syncBackendCollectorFromGoogle(auth.currentUser, token);
       notifyAuthListeners();
       return { firebaseUser: auth.currentUser, synced };
     }
@@ -344,26 +335,56 @@ export async function signInWithGoogleAccount(): Promise<{
   }
 }
 
-// Google Sign-In + Drive OAuth access token acquisition (also generates/syncs CollectorUser!)
+// Google Sign-In + Drive OAuth access token acquisition via Firebase Auth popup (with GIS fallback only if Firebase Auth rejects domain/service)
 export async function signInWithGoogleDrive(forceConsent = false): Promise<{
   user: User | null;
   accessToken: string;
   synced: { user: CollectorUser; isNewUser: boolean; album?: Album } | null;
 }> {
-  if (!GOOGLE_OAUTH_CLIENT_ID) {
-    throw new Error('Falta configurar el oAuthClientId de Google en firebase-applet-config.json.');
-  }
   isSigningIn = true;
   try {
-    const accessToken = await requestDriveTokenViaGis(
-      auth.currentUser?.email,
-      forceConsent,
-      GOOGLE_PROFILE_AND_DRIVE_SCOPES
-    );
+    const result = await signInWithPopup(auth, buildGoogleProvider(true, forceConsent));
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    let accessToken = credential?.accessToken || '';
+
+    if (!accessToken && GOOGLE_OAUTH_CLIENT_ID) {
+      accessToken = await requestDriveTokenViaGis(
+        result.user.email,
+        forceConsent,
+        GOOGLE_PROFILE_AND_DRIVE_SCOPES
+      );
+    }
+
+    if (!accessToken) {
+      throw new Error('SCOPE_MISSING');
+    }
+
     cachedAccessToken = accessToken;
-    const synced = await syncBackendCollectorFromGoogle(auth.currentUser, accessToken);
+    const synced = await syncBackendCollectorFromGoogle(result.user, accessToken);
     notifyAuthListeners();
-    return { user: auth.currentUser, accessToken, synced };
+    return { user: result.user, accessToken, synced };
+  } catch (err) {
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: unknown }).code || '')
+        : '';
+    if (
+      GOOGLE_OAUTH_CLIENT_ID &&
+      (code === 'auth/unauthorized-domain' ||
+        code === 'auth/operation-not-allowed' ||
+        code === 'auth/permission-denied-on-the-service')
+    ) {
+      const accessToken = await requestDriveTokenViaGis(
+        auth.currentUser?.email,
+        forceConsent,
+        GOOGLE_PROFILE_AND_DRIVE_SCOPES
+      );
+      cachedAccessToken = accessToken;
+      const synced = await syncBackendCollectorFromGoogle(auth.currentUser, accessToken);
+      notifyAuthListeners();
+      return { user: auth.currentUser, accessToken, synced };
+    }
+    throw err;
   } finally {
     isSigningIn = false;
   }
