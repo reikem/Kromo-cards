@@ -99,6 +99,20 @@ interface StudioViewProps {
 
 const DEFAULT_PHOTO = '/src/assets/images/concert_stage_vocalist_1795353654776.jpg';
 
+const FALLBACK_FILTER: ImageFilterConfig = {
+  id: 'filter-original',
+  name: 'Original',
+  brightness: 100,
+  contrast: 100,
+  saturate: 100,
+  hueRotate: 0,
+  sepia: 0,
+  grayscale: 0,
+  authorId: 'system',
+  authorName: 'Kromacard',
+  isPublic: true,
+};
+
 const FRAME_OPTIONS: { id: FrameStyle; label: string; desc: string }[] = [
   { id: 'holo', label: 'Holo Prisma', desc: 'Tornasol arcoíris' },
   { id: 'gold', label: 'Dorado Edición', desc: 'Lámina oro 24k' },
@@ -199,8 +213,9 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [shineIntensity, setShineIntensity] = useState(editingCard?.shineIntensity ?? 82);
 
   // Filter State + Custom Filter Builder
+  const availableFilters = filters.length > 0 ? filters : [FALLBACK_FILTER];
   const [selectedFilter, setSelectedFilter] = useState<ImageFilterConfig>(
-    editingCard?.filterSnapshot || filters[0]
+    editingCard?.filterSnapshot || filters[0] || FALLBACK_FILTER
   );
   const [showFilterBuilder, setShowFilterBuilder] = useState(false);
   const [newFilterName, setNewFilterName] = useState('');
@@ -542,8 +557,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
     texture,
     customTextureUrl,
     shineIntensity,
-    filterId: selectedFilter.id,
-    filterSnapshot: selectedFilter,
+    filterId: selectedFilter?.id || FALLBACK_FILTER.id,
+    filterSnapshot: selectedFilter || FALLBACK_FILTER,
     stickers: placedStickers,
     stats,
     autographDataUrl,
@@ -823,13 +838,13 @@ export const StudioView: React.FC<StudioViewProps> = ({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {filters.map((flt) => (
+                {availableFilters.map((flt) => (
                   <button
                     key={flt.id}
                     type="button"
                     onClick={() => setSelectedFilter(flt)}
                     className={`min-h-[52px] p-3 rounded-xl text-left border transition-colors ${
-                      selectedFilter.id === flt.id
+                      (selectedFilter?.id || FALLBACK_FILTER.id) === flt.id
                         ? 'bg-sky-500/20 border-sky-400 text-white'
                         : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
                     }`}

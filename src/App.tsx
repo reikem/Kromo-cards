@@ -139,9 +139,70 @@ interface SpeechRecognitionLike extends EventTarget {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
+const DEFAULT_OFFLINE_FILTER: ImageFilterConfig = {
+  id: 'filter-original',
+  name: 'Original',
+  brightness: 100,
+  contrast: 100,
+  saturate: 100,
+  hueRotate: 0,
+  sepia: 0,
+  grayscale: 0,
+  authorId: 'user-sofia',
+  authorName: 'Kromacard',
+  isPublic: true,
+};
+
+const DEFAULT_OFFLINE_USER: CollectorUser = {
+  id: 'user-sofia',
+  handle: '@sofia_estadio',
+  displayName: 'Coleccionista Offline',
+  avatarColor: '#38BDF8',
+  bio: 'Modo sin conexión usando IndexedDB.',
+  favoriteArtist: 'Kromacard',
+  friends: [],
+};
+
+const DEFAULT_DRAFT_CARD: Photocard = {
+  id: '',
+  serialCode: '',
+  ownerId: 'user-sofia',
+  creatorId: 'user-sofia',
+  albumId: 'alb-spheres',
+  visibility: 'public',
+  tradeable: true,
+  title: 'Mi Recuerdo Especial',
+  subtitle: 'Gira en Vivo · Momento Único',
+  ratingOrBadge: '99',
+  categoryLabel: 'FAN',
+  countryFlag: '✨',
+  location: 'Estadio Nacional',
+  eventDate: 'Hoy',
+  editionLabel: 'Edición Única #01',
+  photoUrl: '/src/assets/images/concert_stage_vocalist_1795353654776.jpg',
+  frameStyle: 'holo',
+  frameShape: 'rectangulo',
+  primaryColor: '#38BDF8',
+  secondaryColor: '#E879F9',
+  texture: 'prism',
+  shineIntensity: 82,
+  filterId: DEFAULT_OFFLINE_FILTER.id,
+  filterSnapshot: DEFAULT_OFFLINE_FILTER,
+  stickers: [],
+  stats: [
+    { label: 'EMOCIÓN', value: 98 },
+    { label: 'MÚSICA', value: 96 },
+    { label: 'ENERGÍA', value: 95 },
+  ],
+  authorMessage: '',
+  likes: 0,
+  createdAt: new Date().toISOString(),
+};
+
 export default function App() {
   const [data, setData] = useState<BootstrapPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [activeUserId, setActiveUserId] = useState<string>(() => {
     try {
       return localStorage.getItem('kromacard_active_user_id') || 'user-sofia';
@@ -370,9 +431,35 @@ export default function App() {
     }
 
     fetch('/api/bootstrap')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const payload = (await res.json()) as BootstrapPayload;
+        if (!payload || !Array.isArray(payload.users) || payload.users.length === 0) {
+          throw new Error('INVALID_BOOTSTRAP_PAYLOAD');
+        }
+        return {
+          ...payload,
+          cards: Array.isArray(payload.cards) ? payload.cards : [],
+          albums: Array.isArray(payload.albums) ? payload.albums : [],
+          banners: Array.isArray(payload.banners) ? payload.banners : [],
+          filters:
+            Array.isArray(payload.filters) && payload.filters.length > 0
+              ? payload.filters
+              : [DEFAULT_OFFLINE_FILTER],
+          stickers: Array.isArray(payload.stickers) ? payload.stickers : [],
+          textures: Array.isArray(payload.textures) ? payload.textures : [],
+          frames: Array.isArray(payload.frames) ? payload.frames : [],
+          backdrops: Array.isArray(payload.backdrops) ? payload.backdrops : [],
+          trades: Array.isArray(payload.trades) ? payload.trades : [],
+          notifications: Array.isArray(payload.notifications) ? payload.notifications : [],
+          chatMessages: Array.isArray(payload.chatMessages) ? payload.chatMessages : [],
+        } satisfies BootstrapPayload;
+      })
       .then((payload: BootstrapPayload) => {
         if (!active) return;
+        setBackendOnline(true);
         setData(payload);
         setLoading(false);
         void saveBootstrapSnapshot(payload);
@@ -388,29 +475,36 @@ export default function App() {
       })
       .catch(async () => {
         if (!active) return;
+        setBackendOnline(false);
         const cached = await loadBootstrapSnapshot();
         const favs = await getAllFavorites();
         if (!active) return;
         setOfflineFavorites(favs);
-        if (cached) {
-          setData(cached);
+        if (cached && Array.isArray(cached.users) && cached.users.length > 0) {
+          setData({
+            ...cached,
+            cards: Array.isArray(cached.cards) ? cached.cards : favs,
+            albums: Array.isArray(cached.albums) ? cached.albums : [],
+            banners: Array.isArray(cached.banners) ? cached.banners : [],
+            filters:
+              Array.isArray(cached.filters) && cached.filters.length > 0
+                ? cached.filters
+                : [DEFAULT_OFFLINE_FILTER],
+            stickers: Array.isArray(cached.stickers) ? cached.stickers : [],
+            textures: Array.isArray(cached.textures) ? cached.textures : [],
+            frames: Array.isArray(cached.frames) ? cached.frames : [],
+            backdrops: Array.isArray(cached.backdrops) ? cached.backdrops : [],
+            trades: Array.isArray(cached.trades) ? cached.trades : [],
+            notifications: Array.isArray(cached.notifications) ? cached.notifications : [],
+            chatMessages: Array.isArray(cached.chatMessages) ? cached.chatMessages : [],
+          });
         } else {
           setData({
-            users: [
-              {
-                id: 'user-sofia',
-                handle: '@sofia_estadio',
-                displayName: 'Coleccionista Offline',
-                avatarColor: '#38BDF8',
-                bio: 'Modo sin conexión usando IndexedDB.',
-                favoriteArtist: 'Kromacard',
-                friends: [],
-              },
-            ],
+            users: [DEFAULT_OFFLINE_USER],
             cards: favs,
             albums: [],
             banners: [],
-            filters: [],
+            filters: [DEFAULT_OFFLINE_FILTER],
             stickers: [],
             textures: [],
             frames: [],
@@ -427,16 +521,25 @@ export default function App() {
     };
   }, []);
 
-  // Real-time WebSocket Connection with auto-reconnect
+  // Real-time WebSocket Connection with auto-reconnect (only when backend API is available)
   useEffect(() => {
+    if (backendOnline !== true) return;
+
     let cancelled = false;
     let reconnectTimer: number | null = null;
+    let openedOnce = false;
+    let failedBeforeOpen = 0;
 
     const connect = () => {
       if (cancelled) return;
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
       wsRef.current = ws;
+
+      ws.onopen = () => {
+        openedOnce = true;
+        failedBeforeOpen = 0;
+      };
 
       ws.onmessage = (ev) => {
         try {
@@ -612,9 +715,14 @@ export default function App() {
       };
 
       ws.onclose = () => {
-        if (!cancelled) {
-          reconnectTimer = window.setTimeout(connect, 2500);
+        if (cancelled) return;
+        if (!openedOnce) {
+          failedBeforeOpen += 1;
+          if (failedBeforeOpen >= 2) {
+            return;
+          }
         }
+        reconnectTimer = window.setTimeout(connect, 2500);
       };
     };
 
@@ -624,27 +732,30 @@ export default function App() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
-  }, []);
+  }, [backendOnline]);
 
-  // Register Service Worker, fetch vapidPublicKey, and sync pushManager subscription
+  // Register Service Worker, fetch vapidPublicKey when backend is online, and sync pushManager subscription
   const pushSubscribedRef = useRef(pushSubscribed);
   useEffect(() => {
     pushSubscribedRef.current = pushSubscribed;
   }, [pushSubscribed]);
 
   useEffect(() => {
+    void registerPushServiceWorker();
+  }, []);
+
+  useEffect(() => {
+    if (backendOnline !== true) return;
     let active = true;
-    void (async () => {
-      await registerPushServiceWorker();
-      const key = await fetchVapidPublicKey();
+    void fetchVapidPublicKey().then((key) => {
       if (active && key) {
         setVapidPublicKey(key);
       }
-    })();
+    });
     return () => {
       active = false;
     };
-  }, []);
+  }, [backendOnline]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -808,8 +919,8 @@ export default function App() {
   };
 
   const currentUser = useMemo(() => {
-    if (!data) return null;
-    return data.users.find((u) => u.id === activeUserId) || data.users[0];
+    if (!data || !Array.isArray(data.users) || data.users.length === 0) return null;
+    return data.users.find((u) => u.id === activeUserId) || data.users[0] || null;
   }, [data, activeUserId]);
 
   // Respect visibility permissions (public, friends, private)
@@ -2165,7 +2276,7 @@ export default function App() {
                 onInspectCard={(c) => setInspectedCard(c)}
                 onUseFrameInStudio={(frm) => {
                   setEditingCard({
-                    ...data.cards[0],
+                    ...(data.cards[0] || DEFAULT_DRAFT_CARD),
                     id: '',
                     serialCode: '',
                     title: 'Nueva Carta con Marco',
@@ -2186,7 +2297,7 @@ export default function App() {
                 }}
                 onUseBackdropInStudio={(bg) => {
                   setEditingCard({
-                    ...data.cards[0],
+                    ...(data.cards[0] || DEFAULT_DRAFT_CARD),
                     id: '',
                     serialCode: '',
                     title: 'Nueva Carta con Fondo',
@@ -2200,7 +2311,7 @@ export default function App() {
                 }}
                 onUseTextureInStudio={(tex) => {
                   setEditingCard({
-                    ...data.cards[0],
+                    ...(data.cards[0] || DEFAULT_DRAFT_CARD),
                     id: '',
                     serialCode: '',
                     title: 'Nueva Carta con Textura',
@@ -2214,7 +2325,7 @@ export default function App() {
                 }}
                 onUseStickerInStudio={(stk) => {
                   setEditingCard({
-                    ...data.cards[0],
+                    ...(data.cards[0] || DEFAULT_DRAFT_CARD),
                     id: '',
                     serialCode: '',
                     title: 'Nueva Carta con Sticker',
@@ -2241,7 +2352,7 @@ export default function App() {
                 }}
                 onCreateCardFromBanner={(ban) => {
                   setEditingCard({
-                    ...data.cards[0],
+                    ...(data.cards[0] || DEFAULT_DRAFT_CARD),
                     id: '',
                     serialCode: '',
                     title: ban.title,
