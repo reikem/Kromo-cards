@@ -99,6 +99,9 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      workbox-window:
+        specifier: ^7.4.1
+        version: 7.4.1
 
 packages:
 
