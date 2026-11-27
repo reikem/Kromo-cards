@@ -332,6 +332,7 @@ export interface TradeOffer {
   message: string;
   status: 'pending' | 'completed' | 'declined';
   createdAt: string;
+  resolvedAt?: string;
 }
 
 export interface RealtimeNotification {
