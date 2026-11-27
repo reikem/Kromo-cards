@@ -1,11 +1,11 @@
 {
-  "projectId": "steel-spark-273016",
-  "appId": "1:832410032075:web:41b613eeb43653bc3a484e",
-  "apiKey": "AIzaSyCOa_TjrJyUIJIF4Co5Z-IJhS-Wnvk6V1A",
-  "authDomain": "steel-spark-273016.firebaseapp.com",
-  "storageBucket": "steel-spark-273016.firebasestorage.app",
-  "messagingSenderId": "832410032075",
-  "measurementId": "",
-  "oAuthClientId": "832410032075-d2ibqomj7i2994fquahop65g1gikpavq.apps.googleusercontent.com",
+  "projectId": "kromos-card",
+  "appId": "1:583344327904:web:ca36be1d9502558662d485",
+  "apiKey": "AIzaSyBtN9x5eQtri5LEcDbYz_4PBxRmYI6ZEeQ",
+  "authDomain": "kromos-card.firebaseapp.com",
+  "storageBucket": "kromos-card.firebasestorage.app",
+  "messagingSenderId": "583344327904",
+  "measurementId": "G-G0LKLC3T04",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
