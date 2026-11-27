@@ -60,6 +60,7 @@ import {
 import type { PushPermissionState } from '../utils/pushNotifications';
 import { Card3D } from './Card3D';
 import { exportTextureImageAsPng } from './CustomTextureStudio';
+import { DateRangeCalendar, toLocalDateKey } from './DateRangeCalendar';
 import { DriveExportButton } from './DriveExportButton';
 import { PaginationControls } from './PaginationControls';
 
@@ -332,6 +333,40 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
       ),
     [myRelatedTrades]
   );
+
+  const tradeActivityDateKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const tr of myHistoryTrades) {
+      const dt = new Date(tr.resolvedAt || tr.createdAt);
+      if (!Number.isNaN(dt.getTime())) {
+        keys.add(toLocalDateKey(dt));
+      }
+    }
+    return keys;
+  }, [myHistoryTrades]);
+
+  const selectHistoryDatePreset = (
+    preset: 'all' | 'today' | '7d' | '30d' | 'custom'
+  ) => {
+    setHistoryDatePreset(preset);
+    const now = new Date();
+    if (preset === 'all') {
+      setHistoryDateFrom('');
+      setHistoryDateTo('');
+    } else if (preset === 'today') {
+      const key = toLocalDateKey(now);
+      setHistoryDateFrom(key);
+      setHistoryDateTo(key);
+    } else if (preset === '7d') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      setHistoryDateFrom(toLocalDateKey(start));
+      setHistoryDateTo(toLocalDateKey(now));
+    } else if (preset === '30d') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+      setHistoryDateFrom(toLocalDateKey(start));
+      setHistoryDateTo(toLocalDateKey(now));
+    }
+  };
 
   const findUser = (id: string) => users.find((u) => u.id === id);
   const findCard = (id?: string) => cards.find((c) => c.id === id);
@@ -1846,175 +1881,196 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              {/* Selector de filtros visuales tipo chip */}
-              <div className="lg:col-span-6 space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Filtrar por Estado
-                </div>
-                <div
-                  role="group"
-                  aria-label="Selector visual de estado de trueques"
-                  className="flex flex-wrap items-center gap-2"
-                >
-                  {(
-                    [
-                      {
-                        id: 'all',
-                        label: 'Todos',
-                        count: myHistoryTrades.length,
-                        icon: <Sparkles className="w-3.5 h-3.5" />,
-                        activeClass:
-                          'bg-sky-500 text-slate-950 border-sky-400 shadow-sm shadow-sky-500/25',
-                        inactiveClass:
-                          'bg-[#0B0D14] border-white/15 text-slate-200 hover:border-sky-400/50 hover:text-white',
-                        countActiveClass: 'bg-slate-950/20 text-slate-950',
-                        countInactiveClass: 'bg-white/10 text-slate-300',
-                      },
-                      {
-                        id: 'completed',
-                        label: 'Aceptados',
-                        count: myCompletedTradesCount,
-                        icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-                        activeClass:
-                          'bg-emerald-400 text-slate-950 border-emerald-300 shadow-sm shadow-emerald-500/25',
-                        inactiveClass:
-                          'bg-emerald-500/10 border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/20 hover:border-emerald-400/50',
-                        countActiveClass: 'bg-slate-950/20 text-slate-950',
-                        countInactiveClass: 'bg-emerald-400/15 text-emerald-300',
-                      },
-                      {
-                        id: 'declined',
-                        label: 'Rechazados',
-                        count: myDeclinedTradesCount,
-                        icon: <XCircle className="w-3.5 h-3.5" />,
-                        activeClass:
-                          'bg-rose-500 text-white border-rose-400 shadow-sm shadow-rose-500/25',
-                        inactiveClass:
-                          'bg-rose-500/10 border-rose-400/25 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/50',
-                        countActiveClass: 'bg-black/25 text-white',
-                        countInactiveClass: 'bg-rose-400/15 text-rose-300',
-                      },
-                      {
-                        id: 'pending',
-                        label: 'Pendientes',
-                        count: pendingTradesCount,
-                        icon: <Clock className="w-3.5 h-3.5" />,
-                        activeClass:
-                          'bg-amber-400 text-slate-950 border-amber-300 shadow-sm shadow-amber-500/25',
-                        inactiveClass:
-                          'bg-amber-400/10 border-amber-400/25 text-amber-200 hover:bg-amber-400/20 hover:border-amber-400/50',
-                        countActiveClass: 'bg-slate-950/20 text-slate-950',
-                        countInactiveClass: 'bg-amber-400/15 text-amber-300',
-                      },
-                    ] as const
-                  ).map((chip) => {
-                    const active = historyStatusFilter === chip.id;
-                    return (
-                      <button
-                        key={chip.id}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => setHistoryStatusFilter(chip.id)}
-                        className={`min-h-[38px] pl-3 pr-2.5 rounded-full border text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
-                          active ? chip.activeClass : chip.inactiveClass
-                        }`}
-                      >
-                        {chip.icon}
-                        <span>{chip.label}</span>
-                        <span
-                          className={`font-mono-num px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            active ? chip.countActiveClass : chip.countInactiveClass
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              <div className="lg:col-span-7 space-y-4">
+                {/* Selector de filtros visuales tipo chip */}
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Filtrar por Estado
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Selector visual de estado de trueques"
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    {(
+                      [
+                        {
+                          id: 'all',
+                          label: 'Todos',
+                          count: myHistoryTrades.length,
+                          icon: <Sparkles className="w-3.5 h-3.5" />,
+                          activeClass:
+                            'bg-sky-500 text-slate-950 border-sky-400 shadow-sm shadow-sky-500/25',
+                          inactiveClass:
+                            'bg-[#0B0D14] border-white/15 text-slate-200 hover:border-sky-400/50 hover:text-white',
+                          countActiveClass: 'bg-slate-950/20 text-slate-950',
+                          countInactiveClass: 'bg-white/10 text-slate-300',
+                        },
+                        {
+                          id: 'completed',
+                          label: 'Aceptados',
+                          count: myCompletedTradesCount,
+                          icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+                          activeClass:
+                            'bg-emerald-400 text-slate-950 border-emerald-300 shadow-sm shadow-emerald-500/25',
+                          inactiveClass:
+                            'bg-emerald-500/10 border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/20 hover:border-emerald-400/50',
+                          countActiveClass: 'bg-slate-950/20 text-slate-950',
+                          countInactiveClass: 'bg-emerald-400/15 text-emerald-300',
+                        },
+                        {
+                          id: 'declined',
+                          label: 'Rechazados',
+                          count: myDeclinedTradesCount,
+                          icon: <XCircle className="w-3.5 h-3.5" />,
+                          activeClass:
+                            'bg-rose-500 text-white border-rose-400 shadow-sm shadow-rose-500/25',
+                          inactiveClass:
+                            'bg-rose-500/10 border-rose-400/25 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/50',
+                          countActiveClass: 'bg-black/25 text-white',
+                          countInactiveClass: 'bg-rose-400/15 text-rose-300',
+                        },
+                        {
+                          id: 'pending',
+                          label: 'Pendientes',
+                          count: pendingTradesCount,
+                          icon: <Clock className="w-3.5 h-3.5" />,
+                          activeClass:
+                            'bg-amber-400 text-slate-950 border-amber-300 shadow-sm shadow-amber-500/25',
+                          inactiveClass:
+                            'bg-amber-400/10 border-amber-400/25 text-amber-200 hover:bg-amber-400/20 hover:border-amber-400/50',
+                          countActiveClass: 'bg-slate-950/20 text-slate-950',
+                          countInactiveClass: 'bg-amber-400/15 text-amber-300',
+                        },
+                      ] as const
+                    ).map((chip) => {
+                      const active = historyStatusFilter === chip.id;
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setHistoryStatusFilter(chip.id)}
+                          className={`min-h-[38px] pl-3 pr-2.5 rounded-full border text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                            active ? chip.activeClass : chip.inactiveClass
                           }`}
                         >
-                          {chip.count}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          {chip.icon}
+                          <span>{chip.label}</span>
+                          <span
+                            className={`font-mono-num px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              active ? chip.countActiveClass : chip.countInactiveClass
+                            }`}
+                          >
+                            {chip.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* Rango de fechas rápido */}
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Atajos de Fecha</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: 'all', label: 'Todas las fechas' },
+                        { id: 'today', label: 'Hoy' },
+                        { id: '7d', label: 'Últimos 7 días' },
+                        { id: '30d', label: 'Últimos 30 días' },
+                        { id: 'custom', label: 'Rango en calendario' },
+                      ] as const
+                    ).map((preset) => {
+                      const active = historyDatePreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => selectHistoryDatePreset(preset.id)}
+                          className={`min-h-[36px] px-3 rounded-xl border text-xs font-semibold transition-colors ${
+                            active
+                              ? 'bg-fuchsia-500/25 border-fuchsia-400 text-fuchsia-100'
+                              : 'bg-[#0B0D14] border-white/10 text-slate-300 hover:border-white/25 hover:text-white'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Direct Date Inputs + Text Search */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/10">
+                  <label className="space-y-1 text-xs">
+                    <span className="text-slate-400 block">Desde</span>
+                    <input
+                      type="date"
+                      value={historyDateFrom}
+                      onChange={(e) => {
+                        setHistoryDateFrom(e.target.value);
+                        setHistoryDatePreset('custom');
+                      }}
+                      aria-label="Filtrar historial desde fecha"
+                      className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
+                    />
+                  </label>
+
+                  <label className="space-y-1 text-xs">
+                    <span className="text-slate-400 block">Hasta</span>
+                    <input
+                      type="date"
+                      value={historyDateTo}
+                      onChange={(e) => {
+                        setHistoryDateTo(e.target.value);
+                        setHistoryDatePreset('custom');
+                      }}
+                      aria-label="Filtrar historial hasta fecha"
+                      className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
+                    />
+                  </label>
+                </div>
+
+                <label className="space-y-1 text-xs block">
+                  <span className="text-slate-400 block">Buscar en historial</span>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      placeholder="Código VER, carta, usuario..."
+                      aria-label="Buscar en historial de trueques"
+                      className="w-full min-h-[40px] pl-9 pr-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white placeholder:text-slate-500"
+                    />
+                  </div>
+                </label>
               </div>
 
-              {/* Rango de fechas rápido */}
-              <div className="lg:col-span-6 space-y-2">
+              {/* Simple Calendar Range Selector */}
+              <div className="lg:col-span-5 space-y-2">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Filtrar por Fecha</span>
+                  <Calendar className="w-3.5 h-3.5 text-fuchsia-400" />
+                  <span>Selector de Rango en Calendario</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(
-                    [
-                      { id: 'all', label: 'Todas las fechas' },
-                      { id: 'today', label: 'Hoy' },
-                      { id: '7d', label: 'Últimos 7 días' },
-                      { id: '30d', label: 'Últimos 30 días' },
-                      { id: 'custom', label: 'Rango exacto' },
-                    ] as const
-                  ).map((preset) => {
-                    const active = historyDatePreset === preset.id;
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => setHistoryDatePreset(preset.id)}
-                        className={`min-h-[36px] px-3 rounded-xl border text-xs font-semibold transition-colors ${
-                          active
-                            ? 'bg-fuchsia-500/25 border-fuchsia-400 text-fuchsia-100'
-                            : 'bg-[#0B0D14] border-white/10 text-slate-300 hover:border-white/25 hover:text-white'
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <DateRangeCalendar
+                  fromDate={historyDateFrom}
+                  toDate={historyDateTo}
+                  activeDateKeys={tradeActivityDateKeys}
+                  onChangeRange={(from, to) => {
+                    setHistoryDateFrom(from);
+                    setHistoryDateTo(to);
+                    setHistoryDatePreset('custom');
+                  }}
+                  onClear={() => selectHistoryDatePreset('all')}
+                />
               </div>
-            </div>
-
-            {/* Custom Date Inputs + Text Search */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-white/10">
-              <label className="space-y-1 text-xs">
-                <span className="text-slate-400 block">Fecha desde</span>
-                <input
-                  type="date"
-                  value={historyDateFrom}
-                  onChange={(e) => {
-                    setHistoryDateFrom(e.target.value);
-                    setHistoryDatePreset('custom');
-                  }}
-                  aria-label="Filtrar historial desde fecha"
-                  className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
-                />
-              </label>
-
-              <label className="space-y-1 text-xs">
-                <span className="text-slate-400 block">Fecha hasta</span>
-                <input
-                  type="date"
-                  value={historyDateTo}
-                  onChange={(e) => {
-                    setHistoryDateTo(e.target.value);
-                    setHistoryDatePreset('custom');
-                  }}
-                  aria-label="Filtrar historial hasta fecha"
-                  className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
-                />
-              </label>
-
-              <label className="space-y-1 text-xs sm:col-span-2 lg:col-span-1">
-                <span className="text-slate-400 block">Buscar en historial</span>
-                <div className="relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={historySearch}
-                    onChange={(e) => setHistorySearch(e.target.value)}
-                    placeholder="Código VER, carta, usuario..."
-                    aria-label="Buscar en historial de trueques"
-                    className="w-full min-h-[40px] pl-9 pr-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white placeholder:text-slate-500"
-                  />
-                </div>
-              </label>
             </div>
           </section>
 

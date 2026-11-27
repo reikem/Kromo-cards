@@ -380,3 +380,145 @@
 .kromacard-driver-popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
   border-bottom-color: #131622 !important;
 }
+
+/* === MODO ECLIPSE: Fondo Negro Puro (#000000) y Alto Contraste === */
+html.eclipse,
+html.eclipse body,
+html.eclipse #root {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+html.eclipse ::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+html.eclipse ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+/* Fondos principales en negro puro #000000 */
+html.eclipse .bg-\[\#0B0D14\],
+html.eclipse .bg-\[\#07090F\],
+html.eclipse .bg-\[\#05070C\],
+html.eclipse .bg-\[\#080A10\] {
+  background-color: #000000 !important;
+}
+
+html.eclipse .bg-\[\#0B0D14\]\/85,
+html.eclipse .bg-\[\#0B0D14\]\/90,
+html.eclipse .bg-\[\#0B0D14\]\/92,
+html.eclipse .bg-\[\#0B0D14\]\/95 {
+  background-color: rgba(0, 0, 0, 0.94) !important;
+}
+
+/* Tarjetas, paneles y modales con contraste OLED profundo */
+html.eclipse .bg-\[\#131622\],
+html.eclipse .bg-\[\#0F121D\],
+html.eclipse .bg-\[\#161927\] {
+  background-color: #050507 !important;
+}
+
+html.eclipse .bg-\[\#131622\]\/90,
+html.eclipse .bg-\[\#131622\]\/95 {
+  background-color: rgba(5, 5, 7, 0.96) !important;
+}
+
+html.eclipse .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Bordes nítidos sobre negro puro */
+html.eclipse .border-white\/5 {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+html.eclipse .border-white\/10 {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+
+html.eclipse .border-white\/15 {
+  border-color: rgba(255, 255, 255, 0.32) !important;
+}
+
+html.eclipse .border-white\/20 {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Mayor contraste tipográfico para lectura inmersiva */
+html.eclipse .text-slate-100,
+html.eclipse .text-slate-200 {
+  color: #ffffff !important;
+}
+
+html.eclipse .text-slate-300 {
+  color: #f8fafc !important;
+}
+
+html.eclipse .text-slate-400 {
+  color: #e2e8f0 !important;
+}
+
+html.eclipse .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+
+html.eclipse input::placeholder,
+html.eclipse textarea::placeholder {
+  color: #cbd5e1 !important;
+  opacity: 0.78;
+}
+
+/* Acentos de texto más luminosos sobre #000000 */
+html.eclipse .text-sky-400 {
+  color: #7dd3fc !important;
+}
+
+html.eclipse .text-sky-300 {
+  color: #bae6fd !important;
+}
+
+html.eclipse .text-emerald-400 {
+  color: #6ee7b7 !important;
+}
+
+html.eclipse .text-emerald-300 {
+  color: #a7f3d0 !important;
+}
+
+html.eclipse .text-amber-300 {
+  color: #fde68a !important;
+}
+
+html.eclipse .text-amber-200 {
+  color: #fef3c7 !important;
+}
+
+html.eclipse .text-fuchsia-400 {
+  color: #f0abfc !important;
+}
+
+html.eclipse .text-fuchsia-300 {
+  color: #f5d0fe !important;
+}
+
+html.eclipse .text-rose-400 {
+  color: #fda4af !important;
+}
+
+html.eclipse .text-rose-300 {
+  color: #fecdd3 !important;
+}
+
+/* Tour popover en modo Eclipse */
+html.eclipse .kromacard-driver-popover {
+  background: #000000 !important;
+  color: #ffffff !important;
+  border-color: rgba(125, 211, 252, 0.75) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95) !important;
+}
+
+html.eclipse .kromacard-driver-popover .driver-popover-description {
+  color: #f1f5f9 !important;
+}
+

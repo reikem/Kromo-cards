@@ -14,6 +14,7 @@ import {
   MessageCircle,
   Mic,
   MicOff,
+  Moon,
   Paintbrush,
   Palette,
   Plus,
@@ -25,6 +26,7 @@ import {
   Sparkles,
   Star,
   Sticker,
+  Sun,
   User,
   Volume2,
   VolumeX,
@@ -214,18 +216,29 @@ export default function App() {
   const [hasGoogleSession, setHasGoogleSession] = useState<boolean>(() =>
     Boolean(getCurrentGoogleUser() || getDriveAccessToken())
   );
+  const isGoogleGatedTab = useCallback(
+    (tab: AppTab) =>
+      tab === 'library' || tab === 'bazaar' || tab === 'chat' || tab === 'profile',
+    []
+  );
   const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    const initialAuthed = Boolean(getCurrentGoogleUser() || getDriveAccessToken());
     try {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
       if (
         tabParam === 'vault' ||
         tabParam === 'studio' ||
-        tabParam === 'library' ||
         tabParam === 'sticker-studio' ||
-        tabParam === 'concerts' ||
-        tabParam === 'bazaar' ||
-        tabParam === 'chat' ||
-        tabParam === 'profile'
+        tabParam === 'concerts'
+      ) {
+        return tabParam;
+      }
+      if (
+        initialAuthed &&
+        (tabParam === 'library' ||
+          tabParam === 'bazaar' ||
+          tabParam === 'chat' ||
+          tabParam === 'profile')
       ) {
         return tabParam;
       }
@@ -275,6 +288,17 @@ export default function App() {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushTesting, setPushTesting] = useState(false);
   const [showVaultSettings, setShowVaultSettings] = useState(false);
+  const [eclipseMode, setEclipseMode] = useState<boolean>(() => {
+    try {
+      const enabled = localStorage.getItem('kromacard_eclipse_mode') === 'true';
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('eclipse', enabled);
+      }
+      return enabled;
+    } catch {
+      return false;
+    }
+  });
   const [autoDriveBackup, setAutoDriveBackup] = useState<boolean>(() => {
     try {
       return localStorage.getItem(`kromacard_auto_drive_backup_${activeUserId}`) === 'true';
@@ -327,6 +351,31 @@ export default function App() {
       setToastMsg((prev) => (prev === msg ? null : prev));
     }, 3600);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('eclipse', eclipseMode);
+    try {
+      localStorage.setItem('kromacard_eclipse_mode', String(eclipseMode));
+    } catch {
+      // ignore storage errors
+    }
+    const metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.content = eclipseMode ? '#000000' : '#0B0D14';
+    }
+  }, [eclipseMode]);
+
+  const toggleEclipseMode = () => {
+    setEclipseMode((prev) => {
+      const next = !prev;
+      showToast(
+        next
+          ? 'Modo Eclipse activado: fondo negro puro (#000000) y alto contraste.'
+          : 'Modo Eclipse desactivado.'
+      );
+      return next;
+    });
+  };
 
   const applySyncedCollectorUser = useCallback(
     (synced: { user: CollectorUser; isNewUser: boolean; album?: Album }) => {
@@ -417,6 +466,12 @@ export default function App() {
     showToast('Sesión de Google cerrada.');
   }, [showToast]);
 
+  useEffect(() => {
+    if (!hasGoogleSession && isGoogleGatedTab(activeTab)) {
+      setActiveTab('vault');
+    }
+  }, [hasGoogleSession, activeTab, isGoogleGatedTab]);
+
   // Load IndexedDB favorites + initial data from Express server (with offline IndexedDB fallback)
   useEffect(() => {
     let active = true;
@@ -426,7 +481,10 @@ export default function App() {
     });
 
     const initialParams = new URLSearchParams(window.location.search);
-    if (initialParams.get('tab') === 'bazaar') {
+    if (
+      initialParams.get('tab') === 'bazaar' &&
+      Boolean(getCurrentGoogleUser() || getDriveAccessToken())
+    ) {
       setActiveTab('bazaar');
     }
 
@@ -801,6 +859,10 @@ export default function App() {
       if (msg?.type === 'NAVIGATE_NOTIFICATION') {
         setShowNotifDrawer(false);
         setInspectedCard(null);
+        if (!Boolean(getCurrentGoogleUser() || getDriveAccessToken())) {
+          showToast('Inicia sesión con Google para abrir Trueque o Sala Chat.');
+          return;
+        }
         if (msg.kind === 'chat') {
           if (msg.roomId) {
             setChatInitialRoomId(msg.roomId);
@@ -814,6 +876,10 @@ export default function App() {
       } else if (msg?.type === 'NAVIGATE_TRADE') {
         setShowNotifDrawer(false);
         setInspectedCard(null);
+        if (!Boolean(getCurrentGoogleUser() || getDriveAccessToken())) {
+          showToast('Inicia sesión con Google para abrir el Bazar de Trueque.');
+          return;
+        }
         setActiveTab('bazaar');
         showToast('Abriendo Bazar de Trueque desde la notificación.');
       }
@@ -1455,6 +1521,10 @@ export default function App() {
 
   const handleOpenChatWithUser = (userId: string) => {
     if (!currentUser) return;
+    if (!hasGoogleSession) {
+      showToast('Inicia sesión con Google para acceder a Sala Chat y Amigos.');
+      return;
+    }
     setChatInitialRoomId(getDmRoomId(currentUser.id, userId));
     setActiveTab('chat');
   };
@@ -1617,36 +1687,38 @@ export default function App() {
                 { id: 'chat', label: 'Sala Chat' },
                 { id: 'profile', label: 'Amigos' },
               ] as { id: AppTab; label: string }[]
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (item.id === 'studio') {
-                    setEditingCard(null);
-                    setStudioInitialTab('photo');
-                    setReturnToStudioAfterSticker(false);
-                  } else if (item.id === 'sticker-studio') {
-                    setReturnToStudioAfterSticker(false);
-                  }
-                  setActiveTab(item.id);
-                }}
-                className={`py-1 whitespace-nowrap shrink-0 transition-colors border-b-2 flex items-center gap-1.5 ${
-                  activeTab === item.id
-                    ? 'text-white border-sky-400'
-                    : 'text-slate-400 border-transparent hover:text-slate-200'
-                }`}
-              >
-                <span>{item.label}</span>
-                {item.id === 'sticker-studio' && newStickerIds.length > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                )}
-                {item.id === 'chat' &&
-                  myNotifications.some((n) => !n.read && n.kind === 'chat') && (
-                    <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
+            )
+              .filter((item) => hasGoogleSession || !isGoogleGatedTab(item.id))
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    if (item.id === 'studio') {
+                      setEditingCard(null);
+                      setStudioInitialTab('photo');
+                      setReturnToStudioAfterSticker(false);
+                    } else if (item.id === 'sticker-studio') {
+                      setReturnToStudioAfterSticker(false);
+                    }
+                    setActiveTab(item.id);
+                  }}
+                  className={`py-1 whitespace-nowrap shrink-0 transition-colors border-b-2 flex items-center gap-1.5 ${
+                    activeTab === item.id
+                      ? 'text-white border-sky-400'
+                      : 'text-slate-400 border-transparent hover:text-slate-200'
+                  }`}
+                >
+                  <span>{item.label}</span>
+                  {item.id === 'sticker-studio' && newStickerIds.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   )}
-              </button>
-            ))}
+                  {item.id === 'chat' &&
+                    myNotifications.some((n) => !n.read && n.kind === 'chat') && (
+                      <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
+                    )}
+                </button>
+              ))}
           </nav>
 
           {/* Zone 3: Google User + Top Alerts + Primary QR Scanner */}
@@ -1708,6 +1780,32 @@ export default function App() {
                 </span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={toggleEclipseMode}
+              aria-pressed={eclipseMode}
+              aria-label={eclipseMode ? 'Desactivar modo Eclipse' : 'Activar modo Eclipse'}
+              title={
+                eclipseMode
+                  ? 'Modo Eclipse activo (Fondo #000000 · Alto contraste)'
+                  : 'Activar modo Eclipse (Fondo #000000 y alto contraste)'
+              }
+              className={`min-h-[38px] px-2.5 lg:px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
+                eclipseMode
+                  ? 'bg-black border-amber-300/75 text-white shadow-[0_0_14px_rgba(255,255,255,0.14)]'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
+              }`}
+            >
+              {eclipseMode ? (
+                <Sun className="w-4 h-4 text-amber-300" />
+              ) : (
+                <Moon className="w-4 h-4 text-sky-300" />
+              )}
+              <span className="hidden xl:inline">
+                {eclipseMode ? 'Eclipse ON' : 'Eclipse'}
+              </span>
+            </button>
 
             <button
               type="button"
@@ -2167,7 +2265,9 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => setInspectedCard(card)}
-                                className="min-h-[40px] rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center justify-center gap-1.5"
+                                className={`min-h-[40px] rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center justify-center gap-1.5 ${
+                                  !isMine && !hasGoogleSession ? 'col-span-2' : ''
+                                }`}
                               >
                                 <Compass className="w-3.5 h-3.5 text-sky-400" />
                                 <span>Girar 3D</span>
@@ -2185,7 +2285,7 @@ export default function App() {
                                   <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
                                   <span>Editar</span>
                                 </button>
-                              ) : (
+                              ) : hasGoogleSession ? (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -2197,7 +2297,7 @@ export default function App() {
                                   <Repeat className="w-3.5 h-3.5" />
                                   <span>Trueque</span>
                                 </button>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </motion.article>
@@ -2253,7 +2353,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'library' && (
+          {hasGoogleSession && activeTab === 'library' && (
             <motion.div
               key="library"
               initial={{ opacity: 0, y: 10 }}
@@ -2484,7 +2584,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'bazaar' && (
+          {hasGoogleSession && activeTab === 'bazaar' && (
             <motion.div
               key="bazaar"
               initial={{ opacity: 0, y: 10 }}
@@ -2533,7 +2633,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'chat' && (
+          {hasGoogleSession && activeTab === 'chat' && (
             <motion.div
               key="chat"
               initial={{ opacity: 0, y: 10 }}
@@ -2555,7 +2655,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'profile' && (
+          {hasGoogleSession && activeTab === 'profile' && (
             <motion.div
               key="profile"
               initial={{ opacity: 0, y: 10 }}
@@ -2592,7 +2692,11 @@ export default function App() {
       </main>
 
       {/* Mobile Bottom Tab Bar (Thumb-Zone Navigation) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0D14]/92 backdrop-blur-md border-t border-white/10 grid grid-cols-7 items-center">
+      <nav
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 h-16 bg-[#0B0D14]/92 backdrop-blur-md border-t border-white/10 grid items-center ${
+          hasGoogleSession ? 'grid-cols-7' : 'grid-cols-3'
+        }`}
+      >
         {(
           [
             { id: 'vault', label: 'Bóveda', icon: <Layers className="w-4 h-4" /> },
@@ -2603,25 +2707,27 @@ export default function App() {
             { id: 'chat', label: 'Chat', icon: <MessageCircle className="w-4 h-4" /> },
             { id: 'profile', label: 'Perfil', icon: <User className="w-4 h-4" /> },
           ] as { id: AppTab; label: string; icon: React.ReactNode }[]
-        ).map((item) => {
-          const active = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                if (item.id === 'studio') setEditingCard(null);
-                setActiveTab(item.id);
-              }}
-              className={`min-h-[44px] flex flex-col items-center justify-center transition-colors ${
-                active ? 'text-sky-400' : 'text-slate-400'
-              }`}
-            >
-              {item.icon}
-              <span className="text-[10px] font-medium tracking-tight mt-0.5">{item.label}</span>
-            </button>
-          );
-        })}
+        )
+          .filter((item) => hasGoogleSession || !isGoogleGatedTab(item.id))
+          .map((item) => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  if (item.id === 'studio') setEditingCard(null);
+                  setActiveTab(item.id);
+                }}
+                className={`min-h-[44px] flex flex-col items-center justify-center transition-colors ${
+                  active ? 'text-sky-400' : 'text-slate-400'
+                }`}
+              >
+                {item.icon}
+                <span className="text-[10px] font-medium tracking-tight mt-0.5">{item.label}</span>
+              </button>
+            );
+          })}
       </nav>
 
       {/* 3D Card Inspector Modal */}
@@ -2645,6 +2751,10 @@ export default function App() {
             setShowPrintModal(true);
           }}
           onProposeTrade={(card) => {
+            if (!hasGoogleSession) {
+              showToast('Inicia sesión con Google para proponer trueques.');
+              return;
+            }
             setInspectedCard(null);
             setTradeTargetCard(card);
             setActiveTab('bazaar');
@@ -2796,7 +2906,7 @@ export default function App() {
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">{n.message}</p>
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      {n.kind === 'trade' && (
+                      {hasGoogleSession && n.kind === 'trade' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -2808,7 +2918,7 @@ export default function App() {
                           Ir al Bazar de Trueque →
                         </button>
                       )}
-                      {n.kind === 'chat' && (
+                      {hasGoogleSession && n.kind === 'chat' && (
                         <button
                           type="button"
                           onClick={() => {
