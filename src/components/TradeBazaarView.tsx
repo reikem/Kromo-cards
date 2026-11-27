@@ -1,14 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
+  BarChart3,
   BellRing,
+  Calendar,
   Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Download,
+  FileSpreadsheet,
   Filter,
   Flame,
   Gem,
   Gift,
+  History,
   Layers,
   Palette,
   RotateCcw,
@@ -19,8 +26,23 @@ import {
   Store,
   Tag,
   Timer,
+  TrendingUp,
+  Users,
   X,
+  XCircle,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type {
   CollectorUser,
   CommunityCategory,
@@ -201,6 +223,30 @@ function getCardRarity(card: Photocard): {
   };
 }
 
+function escapeCsvCell(value: string | number | undefined | null): string {
+  const raw = value === undefined || value === null ? '' : String(value);
+  const formulaSafe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  if (/[",\n\r]/.test(formulaSafe)) {
+    return `"${formulaSafe.replace(/"/g, '""')}"`;
+  }
+  return formulaSafe;
+}
+
+function formatAvgDurationEs(ms: number | null): string {
+  if (ms === null || Number.isNaN(ms) || ms < 0) return '—';
+  const totalMinutes = Math.round(ms / 60000);
+  if (totalMinutes < 1) return '< 1 min';
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  if (hours < 24) {
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+}
+
 export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   currentUser,
   users,
@@ -224,7 +270,7 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   onOpenStickerStudio,
   onNotifyToast,
 }) => {
-  const [tab, setTab] = useState<'bazaar' | 'trades' | 'assets'>('bazaar');
+  const [tab, setTab] = useState<'bazaar' | 'trades' | 'history' | 'assets'>('bazaar');
   const [marketSearch, setMarketSearch] = useState('');
   const [marketFilter, setMarketFilter] = useState<'all' | 'timed' | 'friends'>('all');
   const [categoryFilter, setCategoryFilter] = useState<BazaarCategoryFilter>('all');
@@ -236,6 +282,14 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   const [wishNoteDrafts, setWishNoteDrafts] = useState<Record<string, string>>({});
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, CommunityCategory>>({});
   const [durationDrafts, setDurationDrafts] = useState<Record<string, number>>({});
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<
+    'all' | 'completed' | 'declined' | 'pending'
+  >('all');
+  const [historyDatePreset, setHistoryDatePreset] = useState<'all' | 'today' | '7d' | '30d' | 'custom'>('all');
+  const [historyDateFrom, setHistoryDateFrom] = useState('');
+  const [historyDateTo, setHistoryDateTo] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [showHistoryStats, setShowHistoryStats] = useState(true);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -268,9 +322,295 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
   ).length;
   const completedTradesCount = trades.filter((t) => t.status === 'completed').length;
   const myCompletedTradesCount = myRelatedTrades.filter((t) => t.status === 'completed').length;
+  const myDeclinedTradesCount = myRelatedTrades.filter((t) => t.status === 'declined').length;
+  const myHistoryTrades = useMemo(
+    () =>
+      [...myRelatedTrades].sort(
+        (a, b) =>
+          new Date(b.resolvedAt || b.createdAt).getTime() -
+          new Date(a.resolvedAt || a.createdAt).getTime()
+      ),
+    [myRelatedTrades]
+  );
 
   const findUser = (id: string) => users.find((u) => u.id === id);
   const findCard = (id?: string) => cards.find((c) => c.id === id);
+
+  const filteredHistoryTrades = useMemo(() => {
+    const now = new Date();
+    const startOfTodayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const fromCustomMs = historyDateFrom
+      ? new Date(`${historyDateFrom}T00:00:00`).getTime()
+      : null;
+    const toCustomMs = historyDateTo
+      ? new Date(`${historyDateTo}T23:59:59.999`).getTime()
+      : null;
+
+    return myHistoryTrades.filter((tr) => {
+      if (historyStatusFilter !== 'all' && tr.status !== historyStatusFilter) {
+        return false;
+      }
+
+      const effectiveIso = tr.resolvedAt || tr.createdAt;
+      const effectiveMs = new Date(effectiveIso).getTime();
+
+      if (historyDatePreset === 'today') {
+        if (effectiveMs < startOfTodayMs) return false;
+      } else if (historyDatePreset === '7d') {
+        if (effectiveMs < Date.now() - 7 * 24 * 3600 * 1000) return false;
+      } else if (historyDatePreset === '30d') {
+        if (effectiveMs < Date.now() - 30 * 24 * 3600 * 1000) return false;
+      } else if (historyDatePreset === 'custom') {
+        if (fromCustomMs !== null && !Number.isNaN(fromCustomMs) && effectiveMs < fromCustomMs) {
+          return false;
+        }
+        if (toCustomMs !== null && !Number.isNaN(toCustomMs) && effectiveMs > toCustomMs) {
+          return false;
+        }
+      }
+
+      if (historySearch.trim()) {
+        const q = historySearch.toLowerCase();
+        const fromUser = findUser(tr.fromUserId);
+        const toUser = findUser(tr.toUserId);
+        const offCard = findCard(tr.offeredCardId);
+        const reqCard = findCard(tr.requestedCardId);
+        return (
+          tr.verificationCode.toLowerCase().includes(q) ||
+          tr.message.toLowerCase().includes(q) ||
+          (fromUser?.displayName || '').toLowerCase().includes(q) ||
+          (toUser?.displayName || '').toLowerCase().includes(q) ||
+          (offCard?.title || '').toLowerCase().includes(q) ||
+          (offCard?.serialCode || '').toLowerCase().includes(q) ||
+          (reqCard?.title || '').toLowerCase().includes(q) ||
+          (reqCard?.serialCode || '').toLowerCase().includes(q)
+        );
+      }
+
+      return true;
+    });
+  }, [
+    myHistoryTrades,
+    historyStatusFilter,
+    historyDatePreset,
+    historyDateFrom,
+    historyDateTo,
+    historySearch,
+    users,
+    cards,
+  ]);
+
+  const hasHistoryFilters =
+    historyStatusFilter !== 'all' ||
+    historyDatePreset !== 'all' ||
+    historySearch.trim().length > 0;
+
+  const resetHistoryFilters = () => {
+    setHistoryStatusFilter('all');
+    setHistoryDatePreset('all');
+    setHistoryDateFrom('');
+    setHistoryDateTo('');
+    setHistorySearch('');
+  };
+
+  const tradeStats = useMemo(() => {
+    const completed = myHistoryTrades.filter((t) => t.status === 'completed');
+    const declined = myHistoryTrades.filter((t) => t.status === 'declined');
+    const pending = myHistoryTrades.filter((t) => t.status === 'pending');
+    const resolved = completed.length + declined.length;
+    const acceptanceRate = resolved > 0 ? Math.round((completed.length / resolved) * 100) : 0;
+
+    const swaps = myHistoryTrades.filter((t) => t.type === 'swap').length;
+    const gifts = myHistoryTrades.filter((t) => t.type === 'gift').length;
+    const sent = myHistoryTrades.filter((t) => t.fromUserId === currentUser.id).length;
+    const received = myHistoryTrades.filter((t) => t.toUserId === currentUser.id).length;
+
+    const resolutionDurations: number[] = [];
+    for (const tr of [...completed, ...declined]) {
+      if (!tr.resolvedAt) continue;
+      const startMs = Date.parse(tr.createdAt);
+      const endMs = Date.parse(tr.resolvedAt);
+      if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs) {
+        resolutionDurations.push(endMs - startMs);
+      }
+    }
+    const avgMs =
+      resolutionDurations.length > 0
+        ? resolutionDurations.reduce((acc, v) => acc + v, 0) / resolutionDurations.length
+        : null;
+
+    const partnerCounts = new Map<
+      string,
+      { userId: string; total: number; completed: number }
+    >();
+    for (const tr of myHistoryTrades) {
+      const partnerId = tr.fromUserId === currentUser.id ? tr.toUserId : tr.fromUserId;
+      if (!partnerId || partnerId === currentUser.id) continue;
+      const prev = partnerCounts.get(partnerId) || {
+        userId: partnerId,
+        total: 0,
+        completed: 0,
+      };
+      prev.total += 1;
+      if (tr.status === 'completed') prev.completed += 1;
+      partnerCounts.set(partnerId, prev);
+    }
+    const topPartners = Array.from(partnerCounts.values())
+      .sort((a, b) => b.total - a.total || b.completed - a.completed)
+      .slice(0, 3)
+      .map((entry) => ({
+        ...entry,
+        user: users.find((u) => u.id === entry.userId),
+      }));
+
+    const statusPieData = [
+      { name: 'Aceptados', value: completed.length, color: '#34D399' },
+      { name: 'Rechazados', value: declined.length, color: '#FB7185' },
+      { name: 'Pendientes', value: pending.length, color: '#FBBF24' },
+    ].filter((item) => item.value > 0);
+
+    const monthKeys = new Set<string>();
+    for (const tr of myHistoryTrades) {
+      const d = new Date(tr.resolvedAt || tr.createdAt);
+      if (!Number.isNaN(d.getTime())) {
+        monthKeys.add(`${d.getFullYear()}-${d.getMonth()}`);
+      }
+    }
+    const groupByDay = monthKeys.size <= 1;
+
+    const periodMap = new Map<
+      string,
+      { sortTs: number; periodo: string; aceptados: number; rechazados: number; pendientes: number }
+    >();
+    for (const tr of myHistoryTrades) {
+      const d = new Date(tr.resolvedAt || tr.createdAt);
+      if (Number.isNaN(d.getTime())) continue;
+      const key = groupByDay
+        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = groupByDay
+        ? d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+        : d.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+      const sortTs = groupByDay
+        ? new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+        : new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+
+      const bucket = periodMap.get(key) || {
+        sortTs,
+        periodo: label,
+        aceptados: 0,
+        rechazados: 0,
+        pendientes: 0,
+      };
+      if (tr.status === 'completed') bucket.aceptados += 1;
+      else if (tr.status === 'declined') bucket.rechazados += 1;
+      else bucket.pendientes += 1;
+      periodMap.set(key, bucket);
+    }
+
+    const timelineData = Array.from(periodMap.values()).sort((a, b) => a.sortTs - b.sortTs);
+
+    return {
+      total: myHistoryTrades.length,
+      completedCount: completed.length,
+      declinedCount: declined.length,
+      pendingCount: pending.length,
+      resolvedCount: resolved,
+      acceptanceRate,
+      swaps,
+      gifts,
+      sent,
+      received,
+      avgResolutionLabel: formatAvgDurationEs(avgMs),
+      topPartner: topPartners[0] || null,
+      topPartners,
+      statusPieData,
+      timelineData,
+    };
+  }, [myHistoryTrades, currentUser.id, users]);
+
+  const handleDownloadHistoryCsv = (subset: TradeOffer[], scopeLabel: string) => {
+    if (subset.length === 0) {
+      onNotifyToast?.('No hay registros de trueques para exportar en CSV.');
+      return;
+    }
+
+    const headers = [
+      'ID Trueque',
+      'Código Verificación',
+      'Estado',
+      'Tipo',
+      'Rol del Usuario',
+      'Remitente',
+      'Handle Remitente',
+      'Destinatario',
+      'Handle Destinatario',
+      'Carta Ofrecida / Regalada',
+      'Serial Carta Ofrecida',
+      'Carta Solicitada',
+      'Serial Carta Solicitada',
+      'Mensaje',
+      'Fecha Solicitud (ISO)',
+      'Fecha Resolución (ISO)',
+    ];
+
+    const rows = subset.map((tr) => {
+      const fromUser = findUser(tr.fromUserId);
+      const toUser = findUser(tr.toUserId);
+      const offCard = findCard(tr.offeredCardId);
+      const reqCard = findCard(tr.requestedCardId);
+
+      const estadoLabel =
+        tr.status === 'completed'
+          ? 'Aceptado / Finalizado'
+          : tr.status === 'declined'
+            ? 'Rechazado'
+            : 'Pendiente';
+      const tipoLabel = tr.type === 'gift' ? 'Regalo directo' : 'Trueque bilateral';
+      const rolLabel =
+        tr.fromUserId === currentUser.id ? 'Enviado por ti' : 'Recibido por ti';
+
+      return [
+        tr.id,
+        tr.verificationCode,
+        estadoLabel,
+        tipoLabel,
+        rolLabel,
+        fromUser?.displayName || tr.fromUserId,
+        fromUser?.handle || '',
+        toUser?.displayName || tr.toUserId,
+        toUser?.handle || '',
+        offCard?.title || tr.offeredCardId || '—',
+        offCard?.serialCode || '',
+        tr.type === 'gift' ? 'N/A (Regalo)' : reqCard?.title || tr.requestedCardId,
+        tr.type === 'gift' ? '' : reqCard?.serialCode || '',
+        tr.message || '',
+        tr.createdAt,
+        tr.resolvedAt || '',
+      ]
+        .map(escapeCsvCell)
+        .join(',');
+    });
+
+    const csvContent = `\uFEFF${[headers.map(escapeCsvCell).join(','), ...rows].join('\r\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const cleanHandle = (currentUser.handle || currentUser.id)
+      .replace(/^@/, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_');
+    const dateSlug = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `kromacard-historial-trueques-${cleanHandle}-${dateSlug}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    onNotifyToast?.(
+      `Resumen ${scopeLabel} exportado en CSV (${subset.length} intercambios).`
+    );
+  };
 
   const filteredMarketplace = useMemo(() => {
     const filtered = communityTradeable.filter((card) => {
@@ -526,6 +866,16 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
           }`}
         >
           Trueques y Regalos ({myRelatedTrades.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('history')}
+          className={`min-h-[40px] px-4 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+            tab === 'history' ? 'bg-sky-500 text-slate-950' : 'text-slate-300 hover:text-white'
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          <span>Historial ({myHistoryTrades.length})</span>
         </button>
         <button
           type="button"
@@ -1065,6 +1415,877 @@ export const TradeBazaarView: React.FC<TradeBazaarViewProps> = ({
                 </div>
               );
             })
+          )}
+        </div>
+      )}
+
+      {/* TAB 2B: Detailed Trade History with Date Filter */}
+      {tab === 'history' && (
+        <div className="space-y-5">
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <button
+              type="button"
+              onClick={() => setHistoryStatusFilter('all')}
+              className={`text-left bg-[#131622] border rounded-2xl p-4 transition-colors ${
+                historyStatusFilter === 'all'
+                  ? 'border-sky-400/60 ring-1 ring-sky-400/30'
+                  : 'border-white/10 hover:border-white/25'
+              }`}
+            >
+              <div className="text-[11px] text-slate-400">Total en tu Historial</div>
+              <div className="font-mono-num text-2xl font-extrabold text-white mt-1">
+                {myHistoryTrades.length}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                {filteredHistoryTrades.length} mostrados ahora
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryStatusFilter('completed')}
+              className={`text-left bg-[#131622] border rounded-2xl p-4 transition-colors ${
+                historyStatusFilter === 'completed'
+                  ? 'border-emerald-400/70 ring-1 ring-emerald-400/30'
+                  : 'border-emerald-400/20 hover:border-emerald-400/45'
+              }`}
+            >
+              <div className="text-[11px] text-emerald-300">Aceptados / Finalizados</div>
+              <div className="font-mono-num text-2xl font-extrabold text-emerald-400 mt-1">
+                {myCompletedTradesCount}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                Intercambios y regalos exitosos
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryStatusFilter('declined')}
+              className={`text-left bg-[#131622] border rounded-2xl p-4 transition-colors ${
+                historyStatusFilter === 'declined'
+                  ? 'border-rose-400/70 ring-1 ring-rose-400/30'
+                  : 'border-rose-400/20 hover:border-rose-400/45'
+              }`}
+            >
+              <div className="text-[11px] text-rose-300">Rechazados</div>
+              <div className="font-mono-num text-2xl font-extrabold text-rose-400 mt-1">
+                {myDeclinedTradesCount}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                Solicitudes declinadas
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryStatusFilter('pending')}
+              className={`text-left bg-[#131622] border rounded-2xl p-4 transition-colors ${
+                historyStatusFilter === 'pending'
+                  ? 'border-amber-400/70 ring-1 ring-amber-400/30'
+                  : 'border-amber-400/20 hover:border-amber-400/45'
+              }`}
+            >
+              <div className="text-[11px] text-amber-300">Pendientes</div>
+              <div className="font-mono-num text-2xl font-extrabold text-amber-400 mt-1">
+                {pendingTradesCount}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                {incomingPendingCount > 0
+                  ? `${incomingPendingCount} esperando tu respuesta`
+                  : 'En espera de confirmación'}
+              </div>
+            </button>
+          </div>
+
+          {/* Trade Statistics Section */}
+          <section
+            aria-label="Estadísticas de trueque"
+            className="bg-[#131622] border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-400 shrink-0">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                    <span>Estadísticas de Trueques</span>
+                    <span className="font-mono-num px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-bold text-emerald-300">
+                      {tradeStats.acceptanceRate}% éxito
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Métricas de aceptación, balance de intercambios, tiempos de cierre y actividad temporal.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowHistoryStats((v) => !v)}
+                className="min-h-[34px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 hover:border-white/25 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+              >
+                <span>{showHistoryStats ? 'Ocultar gráficos' : 'Ver estadísticas'}</span>
+                {showHistoryStats ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                )}
+              </button>
+            </div>
+
+            {showHistoryStats && (
+              <div className="space-y-4 pt-2 border-t border-white/10">
+                {/* 4 Analytical Metrics */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-2xl bg-[#0B0D14] border border-white/10 p-3.5">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Tasa de Aceptación</span>
+                    </div>
+                    <div className="font-mono-num text-xl font-extrabold text-emerald-400 mt-1">
+                      {tradeStats.acceptanceRate}%
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {tradeStats.completedCount} de {tradeStats.resolvedCount} resueltos
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#0B0D14] border border-white/10 p-3.5">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-sky-400" />
+                      <span>Balance de Flujo</span>
+                    </div>
+                    <div className="font-mono-num text-xl font-extrabold text-sky-300 mt-1">
+                      {tradeStats.sent} env · {tradeStats.received} rec
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {tradeStats.swaps} trueques · {tradeStats.gifts} regalos
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#0B0D14] border border-white/10 p-3.5">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <Timer className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Tiempo Medio de Cierre</span>
+                    </div>
+                    <div className="font-mono-num text-xl font-extrabold text-amber-300 mt-1">
+                      {tradeStats.avgResolutionLabel}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Desde solicitud hasta resolución
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#0B0D14] border border-white/10 p-3.5">
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-fuchsia-400" />
+                      <span>Socio Principal</span>
+                    </div>
+                    <div className="text-sm sm:text-base font-extrabold text-white truncate mt-1.5">
+                      {tradeStats.topPartner?.user?.displayName || 'Sin registros'}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      {tradeStats.topPartner
+                        ? `${tradeStats.topPartner.total} trueques (${tradeStats.topPartner.completed} aceptados)`
+                        : 'Propón un intercambio para comenzar'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Charts Grid */}
+                {myHistoryTrades.length > 0 && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* Bar Chart: Activity Over Time */}
+                    <div className="lg:col-span-7 bg-[#0B0D14] border border-white/10 rounded-2xl p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-xs sm:text-sm font-bold text-white">
+                            Actividad de Trueques por Fecha
+                          </h4>
+                          <p className="text-[11px] text-slate-400">
+                            Aceptados, rechazados y pendientes según fecha de movimiento
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] text-slate-300">
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                            Aceptados
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-rose-400" />
+                            Rechazados
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            Pendientes
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="h-52 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={tradeStats.timelineData}
+                            margin={{ top: 8, right: 8, left: -24, bottom: 0 }}
+                          >
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              stroke="rgba(255,255,255,0.07)"
+                              vertical={false}
+                            />
+                            <XAxis
+                              dataKey="periodo"
+                              tick={{ fill: '#94A3B8', fontSize: 10 }}
+                              axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              allowDecimals={false}
+                              tick={{ fill: '#94A3B8', fontSize: 11 }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <Tooltip
+                              cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                              contentStyle={{
+                                backgroundColor: '#131622',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                borderRadius: '12px',
+                                fontSize: '12px',
+                                color: '#F8FAFC',
+                              }}
+                            />
+                            <Bar
+                              dataKey="aceptados"
+                              name="Aceptados"
+                              stackId="trades"
+                              fill="#34D399"
+                              radius={[0, 0, 0, 0]}
+                              maxBarSize={32}
+                            />
+                            <Bar
+                              dataKey="rechazados"
+                              name="Rechazados"
+                              stackId="trades"
+                              fill="#FB7185"
+                              radius={[0, 0, 0, 0]}
+                              maxBarSize={32}
+                            />
+                            <Bar
+                              dataKey="pendientes"
+                              name="Pendientes"
+                              stackId="trades"
+                              fill="#FBBF24"
+                              radius={[6, 6, 0, 0]}
+                              maxBarSize={32}
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Donut + Top Partners */}
+                    <div className="lg:col-span-5 bg-[#0B0D14] border border-white/10 rounded-2xl p-4 flex flex-col justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-white">
+                          Distribución de Resultados y Socios
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          Proporción de estados y coleccionistas más activos contigo
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                        <div className="h-36 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={tradeStats.statusPieData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={32}
+                                outerRadius={54}
+                                paddingAngle={4}
+                                stroke="none"
+                              >
+                                {tradeStats.statusPieData.map((entry) => (
+                                  <Cell key={entry.name} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#131622',
+                                  border: '1px solid rgba(255,255,255,0.15)',
+                                  borderRadius: '12px',
+                                  fontSize: '12px',
+                                  color: '#F8FAFC',
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        <div className="space-y-2">
+                          {tradeStats.statusPieData.map((s) => {
+                            const pct =
+                              tradeStats.total > 0
+                                ? Math.round((s.value / tradeStats.total) * 100)
+                                : 0;
+                            return (
+                              <div
+                                key={s.name}
+                                className="flex items-center justify-between text-xs"
+                              >
+                                <span className="flex items-center gap-1.5 text-slate-300">
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                                    style={{ backgroundColor: s.color }}
+                                  />
+                                  <span>{s.name}</span>
+                                </span>
+                                <span className="font-mono-num font-bold text-white">
+                                  {s.value} ({pct}%)
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {tradeStats.topPartners.length > 0 && (
+                        <div className="pt-2.5 border-t border-white/10 space-y-1.5">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Top Coleccionistas en Trueques
+                          </div>
+                          {tradeStats.topPartners.map((p) => (
+                            <div
+                              key={p.userId}
+                              className="flex items-center justify-between gap-2 text-xs"
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="w-5 h-5 rounded-full text-[10px] font-extrabold text-slate-950 flex items-center justify-center shrink-0"
+                                  style={{ backgroundColor: p.user?.avatarColor || '#38BDF8' }}
+                                >
+                                  {(p.user?.displayName || 'C').slice(0, 1).toUpperCase()}
+                                </span>
+                                <span className="text-slate-200 truncate">
+                                  {p.user?.displayName || p.userId}
+                                </span>
+                              </span>
+                              <span className="font-mono-num text-[11px] text-sky-300 font-semibold shrink-0">
+                                {p.completed}/{p.total} aceptados
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* Filter Bar: Visual Chip Status Selector + Date Presets + Custom Date Range + Search + CSV Export */}
+          <section
+            aria-label="Filtros del historial de trueques"
+            className="bg-[#131622] border border-white/10 rounded-3xl p-4 sm:p-5 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-sky-400 shrink-0" />
+                <h3 className="font-display text-sm font-bold text-white">
+                  Historial Detallado de Trueques
+                </h3>
+                <span className="font-mono-num px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-400/30 text-[11px] font-bold text-sky-300">
+                  {filteredHistoryTrades.length} registros
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {hasHistoryFilters && (
+                  <button
+                    type="button"
+                    onClick={resetHistoryFilters}
+                    className="min-h-[34px] px-3 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Limpiar filtros</span>
+                  </button>
+                )}
+
+                {hasHistoryFilters &&
+                  filteredHistoryTrades.length > 0 &&
+                  filteredHistoryTrades.length !== myHistoryTrades.length && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadHistoryCsv(filteredHistoryTrades, 'filtrado')
+                      }
+                      className="min-h-[34px] px-3 rounded-xl bg-white/5 border border-white/15 hover:bg-white/10 text-[11px] font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-sky-300" />
+                      <span>CSV filtrado ({filteredHistoryTrades.length})</span>
+                    </button>
+                  )}
+
+                <button
+                  type="button"
+                  disabled={myHistoryTrades.length === 0}
+                  onClick={() =>
+                    handleDownloadHistoryCsv(myHistoryTrades, 'completo')
+                  }
+                  className="min-h-[36px] px-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Descargar CSV Completo ({myHistoryTrades.length})</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* Selector de filtros visuales tipo chip */}
+              <div className="lg:col-span-6 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Filtrar por Estado
+                </div>
+                <div
+                  role="group"
+                  aria-label="Selector visual de estado de trueques"
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  {(
+                    [
+                      {
+                        id: 'all',
+                        label: 'Todos',
+                        count: myHistoryTrades.length,
+                        icon: <Sparkles className="w-3.5 h-3.5" />,
+                        activeClass:
+                          'bg-sky-500 text-slate-950 border-sky-400 shadow-sm shadow-sky-500/25',
+                        inactiveClass:
+                          'bg-[#0B0D14] border-white/15 text-slate-200 hover:border-sky-400/50 hover:text-white',
+                        countActiveClass: 'bg-slate-950/20 text-slate-950',
+                        countInactiveClass: 'bg-white/10 text-slate-300',
+                      },
+                      {
+                        id: 'completed',
+                        label: 'Aceptados',
+                        count: myCompletedTradesCount,
+                        icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+                        activeClass:
+                          'bg-emerald-400 text-slate-950 border-emerald-300 shadow-sm shadow-emerald-500/25',
+                        inactiveClass:
+                          'bg-emerald-500/10 border-emerald-400/25 text-emerald-200 hover:bg-emerald-500/20 hover:border-emerald-400/50',
+                        countActiveClass: 'bg-slate-950/20 text-slate-950',
+                        countInactiveClass: 'bg-emerald-400/15 text-emerald-300',
+                      },
+                      {
+                        id: 'declined',
+                        label: 'Rechazados',
+                        count: myDeclinedTradesCount,
+                        icon: <XCircle className="w-3.5 h-3.5" />,
+                        activeClass:
+                          'bg-rose-500 text-white border-rose-400 shadow-sm shadow-rose-500/25',
+                        inactiveClass:
+                          'bg-rose-500/10 border-rose-400/25 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/50',
+                        countActiveClass: 'bg-black/25 text-white',
+                        countInactiveClass: 'bg-rose-400/15 text-rose-300',
+                      },
+                      {
+                        id: 'pending',
+                        label: 'Pendientes',
+                        count: pendingTradesCount,
+                        icon: <Clock className="w-3.5 h-3.5" />,
+                        activeClass:
+                          'bg-amber-400 text-slate-950 border-amber-300 shadow-sm shadow-amber-500/25',
+                        inactiveClass:
+                          'bg-amber-400/10 border-amber-400/25 text-amber-200 hover:bg-amber-400/20 hover:border-amber-400/50',
+                        countActiveClass: 'bg-slate-950/20 text-slate-950',
+                        countInactiveClass: 'bg-amber-400/15 text-amber-300',
+                      },
+                    ] as const
+                  ).map((chip) => {
+                    const active = historyStatusFilter === chip.id;
+                    return (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setHistoryStatusFilter(chip.id)}
+                        className={`min-h-[38px] pl-3 pr-2.5 rounded-full border text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+                          active ? chip.activeClass : chip.inactiveClass
+                        }`}
+                      >
+                        {chip.icon}
+                        <span>{chip.label}</span>
+                        <span
+                          className={`font-mono-num px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            active ? chip.countActiveClass : chip.countInactiveClass
+                          }`}
+                        >
+                          {chip.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Rango de fechas rápido */}
+              <div className="lg:col-span-6 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Filtrar por Fecha</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { id: 'all', label: 'Todas las fechas' },
+                      { id: 'today', label: 'Hoy' },
+                      { id: '7d', label: 'Últimos 7 días' },
+                      { id: '30d', label: 'Últimos 30 días' },
+                      { id: 'custom', label: 'Rango exacto' },
+                    ] as const
+                  ).map((preset) => {
+                    const active = historyDatePreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => setHistoryDatePreset(preset.id)}
+                        className={`min-h-[36px] px-3 rounded-xl border text-xs font-semibold transition-colors ${
+                          active
+                            ? 'bg-fuchsia-500/25 border-fuchsia-400 text-fuchsia-100'
+                            : 'bg-[#0B0D14] border-white/10 text-slate-300 hover:border-white/25 hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Date Inputs + Text Search */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t border-white/10">
+              <label className="space-y-1 text-xs">
+                <span className="text-slate-400 block">Fecha desde</span>
+                <input
+                  type="date"
+                  value={historyDateFrom}
+                  onChange={(e) => {
+                    setHistoryDateFrom(e.target.value);
+                    setHistoryDatePreset('custom');
+                  }}
+                  aria-label="Filtrar historial desde fecha"
+                  className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
+                />
+              </label>
+
+              <label className="space-y-1 text-xs">
+                <span className="text-slate-400 block">Fecha hasta</span>
+                <input
+                  type="date"
+                  value={historyDateTo}
+                  onChange={(e) => {
+                    setHistoryDateTo(e.target.value);
+                    setHistoryDatePreset('custom');
+                  }}
+                  aria-label="Filtrar historial hasta fecha"
+                  className="w-full min-h-[40px] px-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white"
+                />
+              </label>
+
+              <label className="space-y-1 text-xs sm:col-span-2 lg:col-span-1">
+                <span className="text-slate-400 block">Buscar en historial</span>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    placeholder="Código VER, carta, usuario..."
+                    aria-label="Buscar en historial de trueques"
+                    className="w-full min-h-[40px] pl-9 pr-3 rounded-xl bg-[#0B0D14] border border-white/10 text-xs text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </label>
+            </div>
+          </section>
+
+          {/* Detailed History List */}
+          {filteredHistoryTrades.length === 0 ? (
+            <div className="bg-[#131622] border border-white/10 rounded-3xl p-10 text-center space-y-2">
+              <History className="w-7 h-7 text-sky-400 mx-auto" />
+              <div className="text-sm font-bold text-white">
+                {myHistoryTrades.length === 0
+                  ? 'Aún no tienes trueques finalizados o rechazados'
+                  : 'No hay trueques en ese rango de fecha o filtro'}
+              </div>
+              <p className="text-xs text-slate-400">
+                {myHistoryTrades.length === 0
+                  ? 'Cuando aceptes, completes o rechaces un intercambio o regalo, aparecerá aquí con su fecha y código verificado.'
+                  : 'Prueba seleccionando "Todas las fechas" o limpiando los filtros activos.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredHistoryTrades.map((tr) => {
+                const fromUser = findUser(tr.fromUserId);
+                const toUser = findUser(tr.toUserId);
+                const offCard = findCard(tr.offeredCardId);
+                const reqCard = findCard(tr.requestedCardId);
+                const isCompleted = tr.status === 'completed';
+                const isPending = tr.status === 'pending';
+                const iWasRecipient = tr.toUserId === currentUser.id;
+                const resolvedIso = tr.resolvedAt || tr.createdAt;
+                const resolvedFormatted = new Date(resolvedIso).toLocaleString('es-ES', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const createdFormatted = new Date(tr.createdAt).toLocaleDateString('es-ES', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                });
+
+                const statusLabel = isCompleted
+                  ? tr.type === 'gift'
+                    ? iWasRecipient
+                      ? 'Regalo Recibido · Finalizado'
+                      : 'Regalo Enviado · Finalizado'
+                    : iWasRecipient
+                      ? 'Aceptado por ti · Finalizado'
+                      : 'Aceptado · Intercambio Finalizado'
+                  : isPending
+                    ? iWasRecipient
+                      ? 'Pendiente · Por responder'
+                      : 'Pendiente · Esperando respuesta'
+                    : iWasRecipient
+                      ? 'Rechazado por ti'
+                      : 'Rechazado por destinatario';
+
+                return (
+                  <article
+                    key={tr.id}
+                    className={`bg-[#131622] border rounded-3xl p-5 space-y-4 ${
+                      isCompleted
+                        ? 'border-emerald-400/25'
+                        : isPending
+                          ? 'border-amber-400/30'
+                          : 'border-rose-400/25'
+                    }`}
+                  >
+                    {/* Top Metadata Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span
+                          className={`px-2.5 py-1 rounded-full border font-bold flex items-center gap-1.5 ${
+                            isCompleted
+                              ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+                              : isPending
+                                ? 'bg-amber-400/15 border-amber-400/40 text-amber-200'
+                                : 'bg-rose-500/15 border-rose-400/40 text-rose-300'
+                          }`}
+                        >
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          ) : isPending ? (
+                            <Clock className="w-3.5 h-3.5" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                          )}
+                          <span>{statusLabel}</span>
+                        </span>
+
+                        <span className="font-mono-num px-2.5 py-1 rounded-lg bg-[#0B0D14] border border-white/10 text-sky-300 font-semibold flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                          <span>{tr.verificationCode}</span>
+                        </span>
+
+                        <span className="px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 font-semibold">
+                          {tr.type === 'gift' ? 'Regalo directo' : 'Trueque bilateral'}
+                        </span>
+                      </div>
+
+                      <div className="text-right text-[11px] text-slate-400 font-mono-num">
+                        {isPending ? (
+                          <div className="text-amber-200 font-semibold">
+                            Enviado: {resolvedFormatted}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-slate-200 font-semibold">
+                              Cerrado: {resolvedFormatted}
+                            </div>
+                            <div>Solicitud: {createdFormatted}</div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Participants & Exchanged Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 items-center">
+                      {/* Offered Card */}
+                      <div className="p-3 rounded-2xl bg-[#0B0D14] border border-white/10 flex items-center gap-3 min-w-0">
+                        {offCard ? (
+                          <img
+                            src={offCard.photoUrl}
+                            alt={offCard.title}
+                            referrerPolicy="no-referrer"
+                            className="w-12 h-16 rounded-xl object-cover border border-white/15 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-16 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 shrink-0">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                            {tr.type === 'gift' ? 'Regalo enviado por' : 'Carta ofrecida por'}{' '}
+                            <span className="text-sky-300">
+                              {fromUser?.id === currentUser.id
+                                ? 'Ti'
+                                : fromUser?.displayName || 'Coleccionista'}
+                            </span>
+                          </div>
+                          <div className="text-xs font-bold text-white truncate">
+                            {offCard?.title || 'Carta no disponible'}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span className="font-mono-num">
+                              {offCard?.serialCode || tr.offeredCardId || '—'}
+                            </span>
+                            {offCard && (
+                              <button
+                                type="button"
+                                onClick={() => onInspectCard(offCard)}
+                                className="text-sky-400 hover:text-sky-300 font-semibold"
+                              >
+                                Ver 3D →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Connector */}
+                      <div className="flex items-center justify-center">
+                        <div
+                          className={`w-9 h-9 rounded-full border flex items-center justify-center ${
+                            isCompleted
+                              ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+                              : isPending
+                                ? 'bg-amber-400/15 border-amber-400/40 text-amber-200'
+                                : 'bg-rose-500/15 border-rose-400/40 text-rose-300'
+                          }`}
+                        >
+                          {tr.type === 'gift' ? (
+                            <Gift className="w-4 h-4" />
+                          ) : (
+                            <ArrowLeftRight className="w-4 h-4" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Requested Card / Recipient */}
+                      <div className="p-3 rounded-2xl bg-[#0B0D14] border border-white/10 flex items-center gap-3 min-w-0">
+                        {tr.type === 'gift' ? (
+                          <div
+                            className="w-12 h-16 rounded-xl border border-white/15 flex items-center justify-center text-base font-extrabold text-slate-950 shrink-0"
+                            style={{ backgroundColor: toUser?.avatarColor || '#38BDF8' }}
+                          >
+                            {(toUser?.displayName || 'F').slice(0, 1).toUpperCase()}
+                          </div>
+                        ) : reqCard ? (
+                          <img
+                            src={reqCard.photoUrl}
+                            alt={reqCard.title}
+                            referrerPolicy="no-referrer"
+                            className="w-12 h-16 rounded-xl object-cover border border-white/15 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-16 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 shrink-0">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
+                            {tr.type === 'gift' ? 'Destinatario' : 'Carta solicitada a'}{' '}
+                            <span className="text-fuchsia-300">
+                              {toUser?.id === currentUser.id
+                                ? 'Ti'
+                                : toUser?.displayName || 'Coleccionista'}
+                            </span>
+                          </div>
+                          <div className="text-xs font-bold text-white truncate">
+                            {tr.type === 'gift'
+                              ? toUser?.displayName || 'Coleccionista'
+                              : reqCard?.title || 'Carta no disponible'}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                            <span className="font-mono-num">
+                              {tr.type === 'gift'
+                                ? toUser?.handle || ''
+                                : reqCard?.serialCode || tr.requestedCardId}
+                            </span>
+                            {tr.type !== 'gift' && reqCard && (
+                              <button
+                                type="button"
+                                onClick={() => onInspectCard(reqCard)}
+                                className="text-sky-400 hover:text-sky-300 font-semibold"
+                              >
+                                Ver 3D →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Message & Pending Quick Actions */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      {tr.message ? (
+                        <div className="flex-1 min-w-[200px] px-3.5 py-2.5 rounded-xl bg-[#0B0D14] border border-white/5 text-xs text-slate-300 italic">
+                          “{tr.message}”
+                        </div>
+                      ) : (
+                        <div />
+                      )}
+
+                      {isPending && iWasRecipient && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onRespondTrade(tr.id, 'decline')}
+                            className="min-h-[38px] px-3.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Rechazar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onRespondTrade(tr.id, 'accept')}
+                            className="min-h-[38px] px-4 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Aceptar e Intercambiar</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

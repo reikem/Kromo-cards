@@ -710,6 +710,32 @@ function createSeedData(): BootstrapPayload {
       status: 'pending',
       createdAt: '2024-10-27T08:40:00.000Z',
     },
+    {
+      id: 'trd-hist-1',
+      type: 'swap',
+      fromUserId: 'user-mateo',
+      toUserId: 'user-sofia',
+      offeredCardId: 'card-gold-98',
+      requestedCardId: 'card-fam-01',
+      verificationCode: 'VER-731904',
+      message: '¡Trato cerrado! Gracias por el intercambio verificado de la edición especial.',
+      status: 'completed',
+      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+      resolvedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000 + 3600 * 1000).toISOString(),
+    },
+    {
+      id: 'trd-hist-2',
+      type: 'swap',
+      fromUserId: 'user-sofia',
+      toUserId: 'user-luna',
+      offeredCardId: 'card-fam-01',
+      requestedCardId: 'card-arena-01',
+      verificationCode: 'VER-512088',
+      message: '¿Te gustaría cambiar tu carta del Palau Sant Jordi por mi recuerdo dorado del Retiro?',
+      status: 'declined',
+      createdAt: new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(),
+      resolvedAt: new Date(Date.now() - 11 * 24 * 3600 * 1000).toISOString(),
+    },
   ];
 
   const notifications: RealtimeNotification[] = [
@@ -1266,6 +1292,16 @@ function loadStore(): BootstrapPayload {
           const existingFrameIds = new Set(parsed.frames.map((f) => f.id));
           for (const sf of seed.frames) {
             if (!existingFrameIds.has(sf.id)) parsed.frames.push(sf);
+          }
+        }
+        if (!Array.isArray(parsed.trades) || parsed.trades.length === 0) {
+          parsed.trades = seed.trades;
+        } else {
+          const existingTradeIds = new Set(parsed.trades.map((t) => t.id));
+          for (const st of seed.trades) {
+            if (st.status !== 'pending' && !existingTradeIds.has(st.id)) {
+              parsed.trades.push(st);
+            }
           }
         }
         if (!Array.isArray(parsed.backdrops) || parsed.backdrops.length === 0) {
@@ -2249,6 +2285,7 @@ async function startServer() {
         message: message || '¡Te envío esta photocard de regalo!',
         status: 'completed',
         createdAt: new Date().toISOString(),
+        resolvedAt: new Date().toISOString(),
       };
       store.trades.unshift(giftTrade);
       const notif: RealtimeNotification = {
@@ -2334,6 +2371,7 @@ async function startServer() {
 
     if (action === 'decline') {
       trade.status = 'declined';
+      trade.resolvedAt = new Date().toISOString();
       const notif: RealtimeNotification = {
         id: `notif-${Date.now()}`,
         userId: trade.fromUserId,
@@ -2372,6 +2410,7 @@ async function startServer() {
     store.cards[reqCardIdx] = { ...store.cards[reqCardIdx], ownerId: trade.fromUserId };
     store.cards[offCardIdx] = { ...store.cards[offCardIdx], ownerId: trade.toUserId };
     trade.status = 'completed';
+    trade.resolvedAt = new Date().toISOString();
 
     const notifFrom: RealtimeNotification = {
       id: `notif-${Date.now()}-a`,
